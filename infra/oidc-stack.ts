@@ -21,7 +21,14 @@ export class OidcStack extends Stack {
         `arn:aws:iam::${this.account}:oidc-provider/token.actions.githubusercontent.com`,
         {
           StringEquals: { 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com' },
-          StringLike: { 'token.actions.githubusercontent.com:sub': `repo:${props.githubRepoClaim}:ref:refs/heads/main` },
+          // Jobs com `environment:` recebem a claim do ambiente em vez da branch. O ambiente
+          // "event" só aceita a branch main (regra de deployment branch no GitHub).
+          StringLike: {
+            'token.actions.githubusercontent.com:sub': [
+              `repo:${props.githubRepoClaim}:ref:refs/heads/main`,
+              `repo:${props.githubRepoClaim}:environment:event`,
+            ],
+          },
         },
       ),
     });
