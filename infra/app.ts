@@ -18,7 +18,7 @@ new SelfieStack(app, 'ServerlessSelfie-App', {
   env,
   zoneName: process.env.ZONE_NAME ?? 'vsoller.com.br',
   hostedZoneId: required('HOSTED_ZONE_ID'),
-  domainName: process.env.APP_DOMAIN ?? 'selfie.vsoller.com.br',
+  domainName: process.env.APP_DOMAIN ?? 'serverless-selfie.vsoller.com.br',
   cognitoDomainPrefix: process.env.COGNITO_DOMAIN_PREFIX ?? 'vgs-serverless-selfie',
   eventEndsAt: process.env.EVENT_ENDS_AT ?? '2026-11-15T02:59:59Z', // fim do dia 14/11 em Brasília
 });

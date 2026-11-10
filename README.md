@@ -12,8 +12,8 @@ A aplicação é a demo ao vivo da palestra. A turma usa e, em seguida, o aprese
 console e mostra o caminho que **aquela** imagem percorreu: API → S3 → EventBridge → Step
 Functions → Lambda → DynamoDB → CloudWatch.
 
-- **App:** `https://selfie.vsoller.com.br` (depois do deploy)
-- **Painel do apresentador:** `https://selfie.vsoller.com.br/admin.html` (login Cognito + MFA)
+- **App:** `https://serverless-selfie.vsoller.com.br` (depois do deploy)
+- **Painel do apresentador:** `https://serverless-selfie.vsoller.com.br/admin.html` (login Cognito + MFA)
 - **Materiais da palestra:** serão publicados em `vsoller.com.br/materiais/` (repositório `palestras`)
 
 | | |
@@ -56,7 +56,7 @@ flowchart LR
         ADM["Painel admin<br/>/admin.html"]
     end
 
-    subgraph Borda["Borda: selfie.vsoller.com.br"]
+    subgraph Borda["Borda: serverless-selfie.vsoller.com.br"]
         R53["Route 53<br/>alias A/AAAA"]
         CF["CloudFront<br/>HTTPS, CSP, OAC"]
     end
@@ -127,7 +127,7 @@ A especificação sugeria `vsoller.com.br/labs/...`. Isso exigiria mexer na dist
 CloudFront e no `BucketDeployment` do portfólio, que já causaram apagão de `materiais/`
 (ver `palestras/CENTRAL.md`). Um subdomínio com **distribuição própria** dá o mesmo benefício
 (mesma origem entre site e API) sem tocar em nenhum recurso existente, no mesmo padrão do
-`deck.vsoller.com.br`. A stack só **adiciona** registros `selfie` na hosted zone.
+`deck.vsoller.com.br`. A stack só **adiciona** registros `serverless-selfie` na hosted zone.
 
 ---
 
@@ -260,7 +260,7 @@ são assíncronos e não garantem o minuto exato).
 
 ## API
 
-Tudo sob `https://selfie.vsoller.com.br/api`. Respostas JSON com `Cache-Control: no-store`.
+Tudo sob `https://serverless-selfie.vsoller.com.br/api`. Respostas JSON com `Cache-Control: no-store`.
 Erros: `{ "error": "CODIGO", "message": "...", "requestId": "..." }`, sem stack trace.
 
 | Método e rota | Auth | Descrição |
@@ -458,7 +458,7 @@ npm run deploy                  # cria certificado (validação DNS automática)
 ```
 
 O certificado ACM é emitido e validado por DNS na própria stack (alguns minutos no primeiro
-deploy). Nada do site principal é alterado; a stack só cria os registros `selfie` na zona.
+deploy). Nada do site principal é alterado; a stack só cria os registros `serverless-selfie` na zona.
 
 ### Criar o usuário do painel
 
@@ -503,7 +503,7 @@ deploy que falhou. Para tirar a app do ar sem apagar nada, use **Encerrar entrad
 ## Roteiro da demo no dia
 
 Antes (com antecedência):
-- [ ] Deploy feito, `https://selfie.vsoller.com.br` testado em **Safari/iPhone** e **Chrome/Android**, incluindo o botão de Story e o fallback de download.
+- [ ] Deploy feito, `https://serverless-selfie.vsoller.com.br` testado em **Safari/iPhone** e **Chrome/Android**, incluindo o botão de Story e o fallback de download.
 - [ ] Login no painel testado (senha + TOTP).
 - [ ] Ensaio: uma selfie, um lote de 20 e a falha controlada; anotar duração real e atraso das métricas.
 - [ ] Abas abertas: app, painel, Step Functions, S3 entrada, DynamoDB, dashboard CloudWatch.

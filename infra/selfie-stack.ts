@@ -142,6 +142,11 @@ export class SelfieStack extends Stack {
     // ---------- Workflow ----------
     const retryTransient = (t: tasks.LambdaInvoke) => {
       t.addRetry({ errors: ['InvalidImage'], maxAttempts: 0 }); // entrada inválida não se repete
+      // Concorrência esgotada (conta com cota baixa, lote da demo): espera e tenta de novo.
+      t.addRetry({
+        errors: ['Lambda.TooManyRequestsException'],
+        interval: Duration.seconds(2), backoffRate: 2, maxAttempts: 6, maxDelay: Duration.seconds(20), jitterStrategy: sfn.JitterType.FULL,
+      });
       t.addRetry({ errors: [sfn.Errors.ALL], interval: Duration.seconds(2), backoffRate: 2, maxAttempts: 2, jitterStrategy: sfn.JitterType.FULL });
       return t;
     };
