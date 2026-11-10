@@ -49,6 +49,10 @@ Functions → Lambda → DynamoDB → CloudWatch.
 
 ## Arquitetura
 
+![Arquitetura do Serverless Selfie SBG na AWS](docs/arquitetura.drawio.svg)
+
+> Diagrama em `docs/arquitetura.drawio.svg`: é um SVG com o draw.io embutido, então abre e edita direto no [draw.io](https://app.diagrams.net). A versão em Mermaid abaixo mostra o mesmo fluxo em texto.
+
 ```mermaid
 flowchart LR
     subgraph Cliente["📱 Celular / navegador"]
@@ -179,6 +183,8 @@ sequenceDiagram
 ---
 
 ## Workflow: idempotência, retry e falhas
+
+![Workflow do Step Functions: reivindicar, validar, gerar saídas em paralelo e concluir, com Retry e Catch](docs/workflow.drawio.svg)
 
 ```mermaid
 stateDiagram-v2
