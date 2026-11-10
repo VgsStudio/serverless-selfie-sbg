@@ -139,10 +139,11 @@ async function refresh() {
   }
 }
 
-async function action(label, fn) {
-  $('#action-status').textContent = `${label}…`;
+// Mensagem curta por ação; os jobIds aparecem na tabela de trabalhos recentes.
+async function action(pending, fn, done) {
+  $('#action-status').textContent = `${pending}…`;
   try {
-    $('#action-status').textContent = `${label}: ${JSON.stringify(await fn())}`;
+    $('#action-status').textContent = done(await fn());
   } catch (e) {
     $('#action-status').textContent = '';
     fail(e);
@@ -169,11 +170,22 @@ async function action(label, fn) {
   ];
   $('#links').replaceChildren(...links.map(([t, href]) => el('a', t, { href, target: '_blank', rel: 'noopener', className: 'btn ghost' })));
 
-  $('#load').addEventListener('click', () => action('Lote', () => api('/load', { count: Number($('#count').value), intervalMs: Number($('#interval').value) })));
-  $('#stop').addEventListener('click', () => action('Parar', () => api('/stop', {})));
-  $('#retry').addEventListener('click', () => action('Falha controlada', () => api('/retry-demo', {})));
-  $('#accepting').addEventListener('click', (e) =>
-    action('Entrada', () => api('/accepting', { accepting: e.target.dataset.accepting !== 'true' })));
+  $('#load').addEventListener('click', () => action(
+    'Enviando lote',
+    () => api('/load', { count: Number($('#count').value), intervalMs: Number($('#interval').value) }),
+    (r) => `✓ ${r.created} trabalhos sintéticos enviados${r.stopped ? ' (lote interrompido)' : ''}. Acompanhe na tabela abaixo.`,
+  ));
+  $('#stop').addEventListener('click', () => action(
+    'Parando', () => api('/stop', {}), () => '✓ Lote interrompido. Trabalhos já aceitos terminam normalmente.',
+  ));
+  $('#retry').addEventListener('click', () => action(
+    'Criando trabalho', () => api('/retry-demo', {}),
+    (r) => `✓ Trabalho ${r.jobId.slice(0, 12)}… criado: a etapa Story falha na 1ª tentativa e o Retry conclui na 2ª.`,
+  ));
+  $('#accepting').addEventListener('click', (e) => action(
+    'Atualizando', () => api('/accepting', { accepting: e.target.dataset.accepting !== 'true' }),
+    (r) => (r.accepting ? '✓ Entrada reaberta.' : '✓ Entrada encerrada: novas sessões e selfies estão bloqueadas.'),
+  ));
   $('#logout').addEventListener('click', logout);
 
   await refresh();

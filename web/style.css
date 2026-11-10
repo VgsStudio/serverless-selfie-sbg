@@ -126,3 +126,5 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
 .tag.FAILED, .tag.EXPIRED { background: #fde4e8; }
 .tag.PROCESSING, .tag.RECEIVED { background: #e3f3fc; }
 .mt { margin-top: 10px; }
+/* texto longo (ids, mensagens de erro) quebra em vez de estourar a largura */
+.card, .alert, #action-status { overflow-wrap: anywhere; min-width: 0; }
