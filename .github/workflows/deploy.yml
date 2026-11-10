@@ -13,8 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 # Repositório público = logs públicos. O ARN do papel (que contém o ID da conta)
-# fica no secret AWS_DEPLOY_ROLE_ARN, que o GitHub troca por *** em qualquer log;
-# a variable de mesmo nome é só reserva até o secret ser criado. A hosted zone é
+# fica no secret AWS_DEPLOY_ROLE_ARN, que o GitHub troca por *** em qualquer log. A hosted zone é
 # descoberta pelo nome no deploy, então o ID dela não precisa existir aqui.
 jobs:
   deploy:
@@ -31,7 +30,7 @@ jobs:
       - name: Credenciais AWS via OIDC (sem access key)
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN || vars.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
           mask-aws-account-id: true
       - name: cdk deploy
