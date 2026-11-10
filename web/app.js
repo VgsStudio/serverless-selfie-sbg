@@ -107,7 +107,7 @@ function mark(step, pct) {
   $('#upload-pct').textContent = pct === undefined ? '' : `${pct}%`;
 }
 
-function upload({ url, fields }, blob) {
+function uploadOnce({ url, fields }, blob) {
   return new Promise((resolve, reject) => {
     const form = new FormData();
     for (const [k, v] of Object.entries(fields)) form.append(k, v);
@@ -116,9 +116,21 @@ function upload({ url, fields }, blob) {
     xhr.open('POST', url);
     xhr.upload.onprogress = (e) => e.lengthComputable && mark('upload', Math.round((e.loaded / e.total) * 100));
     xhr.onload = () => (xhr.status < 300 ? resolve() : reject(new Error('O envio da imagem foi recusado. Tente de novo.')));
-    xhr.onerror = () => reject(new Error('Falha de rede no envio. Tente de novo.'));
+    xhr.onerror = () => reject(Object.assign(new Error('Não consegui enviar a imagem: a conexão caiu ou esta rede bloqueia o armazenamento da AWS. Tente de novo ou troque de rede (Wi-Fi ↔ 4G).'), { network: true }));
     xhr.send(form);
   });
+}
+
+// Oscilação de rede no celular é comum: tenta de novo uma vez, com a mesma
+// autorização (vale 2 min). Recusa do S3 (4xx) não é repetida.
+async function upload(target, blob) {
+  try {
+    await uploadOnce(target, blob);
+  } catch (e) {
+    if (!e.network) throw e;
+    await sleep(1500);
+    await uploadOnce(target, blob);
+  }
 }
 
 async function generate() {

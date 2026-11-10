@@ -16,7 +16,7 @@
     <header class="hero">
       <p class="eyebrow">Serverless Selfie SBG</p>
       <h1>Quanto custa <em>uma selfie</em>?</h1>
-      <p class="lead">Consumo medido no ensaio da demo × preços oficiais da AWS em us-east-1. Sem Free Tier e sem créditos: é o preço cheio.</p>
+      <p class="lead">Consumo medido no ensaio da demo × preços oficiais da AWS em us-east-1. Por padrão, preço cheio: sem franquias e sem créditos.</p>
     </header>
 
     <section class="card">
@@ -27,6 +27,7 @@
         <label>Selfies por pessoa <input id="per-session" type="number" min="1" step="1" value="2"></label>
         <label>Câmbio US$ → R$ <input id="fx" type="number" min="0" step="0.01" value="5.50"></label>
       </div>
+      <label class="check mt"><input id="free-tier" type="checkbox"> Descontar as franquias mensais permanentes (Step Functions: 4.000 transições; Lambda: 1 milhão de requisições e 400 mil GB-s)</label>
       <div class="grid mt" id="totals"></div>
       <div class="table-wrap">
         <table>
@@ -42,9 +43,10 @@
         <li><strong>Consumo:</strong> medido no CloudWatch em 10/11/2026 (26 execuções do workflow). Cada selfie gera 2 renderizações de ~1,9 s numa Lambda de 2 GB, 1 claim (~0,12 s) e 1 validação (~0,2 s) de 256 MB, e 8 transições no Step Functions.</li>
         <li><strong>Preços:</strong> AWS Price List API, região us-east-1, consultada em 10/11/2026. Lambda ARM, API Gateway HTTP API, Step Functions Standard, DynamoDB on-demand, S3 Standard, transferência do S3 para a internet, CloudFront (visitantes na América do Sul) e ingestão de logs do CloudWatch.</li>
         <li><strong>Fica de fora:</strong> custos fixos que não dependem de selfie, como o dashboard do CloudWatch (US$ 3/mês, os 3 primeiros da conta são grátis) e o alarme (US$ 0,10/mês). Eventos do S3 no EventBridge não são cobrados. O armazenamento de até 1 hora custa uma fração de centavo.</li>
-        <li><strong>Free Tier:</strong> com créditos ou franquias da conta, o valor pago pode ser zero. Mas zero na fatura não quer dizer zero de consumo: serverless não é sinônimo de grátis.</li>
+        <li><strong>Franquias permanentes:</strong> todo mês, cada conta tem 4.000 transições de Step Functions e, na Lambda, 1 milhão de requisições e 400 mil GB-s sem custo. Com 8 transições por selfie, as primeiras ~500 selfies do mês não pagam Step Functions; a franquia de GB-s da Lambda cobre umas 50 mil. Elas são da conta inteira, divididas com o que mais estiver rodando nela.</li>
+        <li><strong>Free Tier e créditos:</strong> com créditos, o valor pago pode ser zero. Mas zero na fatura não quer dizer zero de consumo: serverless não é sinônimo de grátis.</li>
         <li><strong>Câmbio:</strong> valor de referência, ajuste para o dia.</li>
-        <li><strong>Conferir na AWS:</strong> a mesma conta para 1.000 selfies por mês (Lambda, Step Functions, API Gateway e DynamoDB) está no <a href="https://calculator.aws/#/estimate?id=f75a703d88fde696f77f23321068d3b027857b1e" target="_blank" rel="noopener">AWS Pricing Calculator</a>.</li>
+        <li><strong>Conferir na AWS:</strong> a mesma conta para 1.000 selfies por mês (Lambda, Step Functions, API Gateway e DynamoDB) está no <a href="https://calculator.aws/#/estimate?id=268180ce0b2def6db6543154588ce80833ac26b7" target="_blank" rel="noopener">AWS Pricing Calculator</a>: US$ 0,22/mês. Ela desconta só a franquia do Step Functions (4.000 transições = US$ 0,10). Nos mesmos serviços, sem nenhuma franquia, esta página dá US$ 0,32: a diferença é exatamente essa franquia.</li>
       </ul>
     </section>
 

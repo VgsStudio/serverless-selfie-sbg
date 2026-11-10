@@ -140,3 +140,5 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
 .stat.highlight { border-color: var(--purple); box-shadow: 0 0 0 2px var(--purple) inset; }
 .row select { min-height: 44px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; font: inherit; max-width: 100%; }
 .btn.danger { border-color: var(--danger); }
+.check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--muted); }
+.check input { margin-top: 3px; width: 18px; height: 18px; flex: none; }

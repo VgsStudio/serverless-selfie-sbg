@@ -582,7 +582,7 @@ exemplo. Compartilhar falhou → baixar. Tudo falhou → gravação, dita como g
 
 ## Custos
 
-Calculadora pública: **`/custos.html`**. Estimativa equivalente no AWS Pricing Calculator (1.000 selfies/mês): https://calculator.aws/#/estimate?id=f75a703d88fde696f77f23321068d3b027857b1e . Ela cruza o **consumo medido no ensaio** (CloudWatch,
+Calculadora pública: **`/custos.html`**. Resumo para slides em [`docs/custos.md`](docs/custos.md). Estimativa equivalente no AWS Pricing Calculator (1.000 selfies/mês): https://calculator.aws/#/estimate?id=f75a703d88fde696f77f23321068d3b027857b1e . Ela cruza o **consumo medido no ensaio** (CloudWatch,
 26 execuções) com os **preços oficiais de us-east-1** (AWS Price List API, 10/11/2026), sem
 Free Tier e sem créditos, ou seja, o preço cheio.
 

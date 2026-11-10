@@ -16,6 +16,10 @@ const PRICE = {
   logsGb: 0.5, // ingestão CloudWatch Logs
 };
 
+// Franquias mensais permanentes (por conta, valem todo mês, compartilhadas com o
+// resto da conta). A calculadora oficial da AWS já desconta a do Step Functions.
+const ALWAYS_FREE = { stateTransitions: 4000, lambdaRequests: 1_000_000, lambdaGbSeconds: 400_000 };
+
 // Consumo medido no ensaio (CloudWatch, 26 execuções).
 const MEASURED = {
   apiMs: 146, apiGb: 0.25,
@@ -32,7 +36,7 @@ const $ = (s) => document.querySelector(s);
 const MB_TO_GB = 1 / 1024;
 
 /** Consumo e custo de N selfies, por serviço. */
-function compute({ selfies, polls, perSession }) {
+function compute({ selfies, polls, perSession, freeTier = false }) {
   const sessions = selfies / perSession;
   const apiCalls = selfies * (1 + polls + 1) + sessions; // criar + consultas + resultado; sessão
   const apiGbS = apiCalls * (MEASURED.apiMs / 1000) * MEASURED.apiGb;
@@ -51,11 +55,16 @@ function compute({ selfies, polls, perSession }) {
   const logsGb = (invocations * MEASURED.logKbPerInvocation) / 1024 / 1024;
 
   const n = (v, unit) => `${Math.round(v).toLocaleString('pt-BR')} ${unit}`;
+  const transitions = selfies * MEASURED.transitions;
+  // Com franquia: só paga o que passa dela. GB-s grátis divididos na proporção de cada linha.
+  const free = (used, allowance) => (freeTier ? Math.min(used, allowance) : 0);
+  const gbS = renderGbS + apiGbS + stepGbS;
+  const paidGbShare = gbS ? (gbS - free(gbS, ALWAYS_FREE.lambdaGbSeconds)) / gbS : 0;
   return [
-    ['Step Functions', 'transições de estado', n(selfies * MEASURED.transitions, 'transições'), selfies * MEASURED.transitions * PRICE.stateTransition],
-    ['Lambda (render)', 'GB-segundo das molduras', n(renderGbS, 'GB-s'), renderGbS * PRICE.lambdaGbSecond],
-    ['Lambda (api e etapas)', 'GB-segundo', n(apiGbS + stepGbS, 'GB-s'), (apiGbS + stepGbS) * PRICE.lambdaGbSecond],
-    ['Lambda', 'requisições', n(invocations, 'invocações'), invocations * PRICE.lambdaRequest],
+    ['Step Functions', 'transições de estado', n(transitions, 'transições'), (transitions - free(transitions, ALWAYS_FREE.stateTransitions)) * PRICE.stateTransition],
+    ['Lambda (render)', 'GB-segundo das molduras', n(renderGbS, 'GB-s'), renderGbS * paidGbShare * PRICE.lambdaGbSecond],
+    ['Lambda (api e etapas)', 'GB-segundo', n(apiGbS + stepGbS, 'GB-s'), (apiGbS + stepGbS) * paidGbShare * PRICE.lambdaGbSecond],
+    ['Lambda', 'requisições', n(invocations, 'invocações'), (invocations - free(invocations, ALWAYS_FREE.lambdaRequests)) * PRICE.lambdaRequest],
     ['API Gateway', 'requisições HTTP API', n(apiCalls, 'requisições'), apiCalls * PRICE.apiRequest],
     ['S3', 'PUT/POST/LIST e GET', n(s3Tier1 + s3Tier2, 'requisições'), s3Tier1 * PRICE.s3Tier1 + s3Tier2 * PRICE.s3Tier2],
     ['S3 → internet', 'download das molduras', `${(outGb * 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`, outGb * PRICE.s3OutGb],
@@ -79,7 +88,7 @@ function update() {
   const num = (id, min) => Math.max(min, Number($(id).value) || 0);
   const selfies = num('#selfies', 1);
   const fx = num('#fx', 0);
-  const rows = compute({ selfies, polls: num('#polls', 0), perSession: num('#per-session', 1) });
+  const rows = compute({ selfies, polls: num('#polls', 0), perSession: num('#per-session', 1), freeTier: $('#free-tier').checked });
   const total = rows.reduce((s, r) => s + r[3], 0);
   const perSelfie = total / selfies;
 
@@ -88,7 +97,7 @@ function update() {
     [brl(total * fx), 'total em reais'],
     [usd(perSelfie), 'média por selfie'],
     [brl(perSelfie * fx), 'média por selfie em reais'],
-    [Math.floor(1 / perSelfie).toLocaleString('pt-BR'), 'selfies por US$ 1'],
+    [perSelfie ? Math.floor(1 / perSelfie).toLocaleString('pt-BR') : '∞', 'selfies por US$ 1'],
   ];
   $('#totals').replaceChildren(...stats.map(([v, label], i) => {
     const box = el('div', undefined, i === 2 ? 'stat highlight' : 'stat');
@@ -96,11 +105,12 @@ function update() {
     return box;
   }));
   $('#rows').replaceChildren(...rows.map(([service, what, qty, cost]) => {
+    const pct = total ? `${((cost / total) * 100).toFixed(0)}%` : '—';
     const tr = document.createElement('tr');
-    tr.append(el('td', service), el('td', what, 'muted'), el('td', qty), el('td', usd(cost)), el('td', `${((cost / total) * 100).toFixed(0)}%`));
+    tr.append(el('td', service), el('td', what, 'muted'), el('td', qty), el('td', usd(cost)), el('td', pct));
     return tr;
   }));
 }
 
-for (const id of ['#selfies', '#polls', '#per-session', '#fx']) $(id).addEventListener('input', update);
+for (const id of ['#selfies', '#polls', '#per-session', '#fx', '#free-tier']) $(id).addEventListener('input', update);
 update();
