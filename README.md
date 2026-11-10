@@ -282,6 +282,7 @@ Erros: `{ "error": "CODIGO", "message": "...", "requestId": "..." }`, sem stack 
 | `POST /api/admin/stop` | JWT Cognito | Interrompe o lote em andamento (trabalhos já aceitos continuam). |
 | `POST /api/admin/retry-demo` | JWT Cognito | Cria um trabalho sintético com falha transitória programada. |
 | `POST /api/admin/accepting` | JWT Cognito | `{ accepting: boolean }`: fecha/reabre a entrada de sessões e trabalhos. |
+| `POST /api/admin/cleanup` | JWT Cognito | `{ scope, dryRun? }` com `scope` = `all`, `synthetic`, `15m`, `1h` ou `3h`: apaga trabalhos (arquivos e registros) do escopo; `all` também apaga sessões e zera contadores. Com `dryRun`, só conta. |
 
 **Upload:** o navegador faz `POST` multipart direto para o S3 com os `fields` recebidos e o
 arquivo por último. A política assinada exige `content-length-range` até o limite e o
@@ -468,17 +469,20 @@ repositório (*Settings → Secrets and variables → Actions*), lidos pelo work
 
 ### Configuração do repositório
 
-| Variable | Conteúdo |
-|---|---|
-| `AWS_DEPLOY_ROLE_ARN` | ARN do papel `github-actions-serverless-selfie-deploy` |
-| `HOSTED_ZONE_ID` | ID da hosted zone de `vsoller.com.br` |
-| `REPO_OIDC_CLAIM` | claim imutável do repo: `gh api repos/VgsStudio/serverless-selfie-sbg --jq '"\(.owner.login)@\(.owner.id)/\(.name)@\(.id)"'` |
+| Onde | Nome | Conteúdo |
+|---|---|---|
+| **Secret** | `AWS_DEPLOY_ROLE_ARN` | ARN do papel `github-actions-serverless-selfie-deploy` |
+| Variable | `REPO_OIDC_CLAIM` | claim imutável do repo: `gh api repos/VgsStudio/serverless-selfie-sbg --jq '"\(.owner.login)@\(.owner.id)/\(.name)@\(.id)"'` |
 
-Mais o ambiente **`event`** (*Settings → Environments*), usado pelo job de deploy. Dá para
+Mais o ambiente **`event`** (*Settings → Environments*), restrito à branch `main`. Dá para
 exigir aprovação manual nele.
 
-São **variables**, não secrets: nenhum desses valores dá acesso a nada sozinho. A confiança
-está na política OIDC do papel, restrita à branch `main` **deste** repositório.
+O ARN do papel é **secret** porque contém o ID da conta e, em repositório público, **os logs do
+Actions também são públicos**: secrets aparecem como `***`, variables não. O workflow ainda
+liga `mask-aws-account-id` para o ID da conta não vazar em saídas do CDK. A hosted zone **não
+precisa de ID**: o CDK descobre a zona pelo nome (`HostedZone.fromLookup`) durante o deploy.
+Nenhum desses valores dá acesso a nada sozinho; a confiança está na política OIDC do papel,
+restrita à branch `main` **deste** repositório.
 
 ### Primeira vez: criar o papel do GitHub (uma única vez)
 
@@ -563,9 +567,14 @@ exemplo. Compartilhar falhou → baixar. Tudo falhou → gravação, dita como g
 1. **Painel → Encerrar entrada.** Novas sessões e trabalhos param na hora; trabalhos já
    aceitos terminam normalmente.
 2. Em até 1 hora tudo é apagado sozinho (vencimento em 45 min + varredura a cada 10 min).
-3. Para apagar antes: `npm run event:cleanup` (dry-run) e depois
-   `npm run event:cleanup -- --yes`. Apaga todas as versões dos buckets de entrada e saída e
-   todos os itens da tabela **desta stack**, e nada além disso.
+3. Para apagar antes: **Painel → Limpar dados**, escolhendo o escopo:
+   - **Tudo**: selfies, sessões e contadores. É o que deixa o painel zerado para a palestra.
+   - **Só os sintéticos**: some com os lotes e a falha controlada do ensaio.
+   - **Criados há mais de 15 min / 1 h / 3 h**: preserva o que acabou de acontecer.
+
+   O painel mostra antes quantos itens vai apagar e pede confirmação. Apaga fotos e molduras
+   (todas as versões) e os registros, só **desta stack**. Pela linha de comando, o equivalente a
+   "Tudo" é `npm run event:cleanup` (dry-run) e `npm run event:cleanup -- --yes`.
 4. Para remover tudo: `npx cdk destroy ServerlessSelfie-App`. Buckets, tabela e user pool desta
    demo estão com remoção automática; nenhum recurso do site principal é afetado.
 

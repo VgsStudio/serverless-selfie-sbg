@@ -49,6 +49,18 @@
           <button id="accepting" class="btn ghost" type="button">…</button>
           <button id="logout" class="btn ghost" type="button">Sair</button>
         </div>
+        <div class="row mt">
+          <label>Limpar
+            <select id="cleanup-scope">
+              <option value="all">Tudo: zera o painel (selfies, sessões e contadores)</option>
+              <option value="synthetic">Só os trabalhos sintéticos (lotes e falha controlada)</option>
+              <option value="15m">Criados há mais de 15 minutos</option>
+              <option value="1h">Criados há mais de 1 hora</option>
+              <option value="3h">Criados há mais de 3 horas</option>
+            </select>
+          </label>
+          <button id="cleanup" class="btn danger" type="button">Limpar dados</button>
+        </div>
         <p id="action-status" class="small muted"></p>
       </div>
 

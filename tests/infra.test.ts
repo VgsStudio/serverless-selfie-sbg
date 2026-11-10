@@ -25,7 +25,7 @@ test('buckets bloqueiam acesso público e exigem TLS', () => {
 
 test('só as rotas /api/admin/* exigem JWT do Cognito', () => {
   const routes = Object.values(t.findResources('AWS::ApiGatewayV2::Route')).map((r) => r.Properties);
-  assert.equal(routes.length, 11);
+  assert.equal(routes.length, 12);
   for (const r of routes) {
     const isAdmin = String(r.RouteKey).includes('/api/admin/');
     assert.equal(r.AuthorizationType, isAdmin ? 'JWT' : 'NONE', r.RouteKey);

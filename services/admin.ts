@@ -1,14 +1,14 @@
 // API administrativa (painel do apresentador). Toda rota aqui passa pelo
 // JWT authorizer do Cognito no API Gateway — a Lambda nem é invocada sem
 // um token válido. Nada de foto, sessão ou token no que é devolvido.
-import { GetCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { BatchWriteCommand, GetCommand, ScanCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { CloudWatchClient, GetMetricDataCommand, type MetricDataResult } from '@aws-sdk/client-cloudwatch';
 import { GetAccountSettingsCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import sample from '../web/sample.jpg';
 import {
   INPUT_BUCKET, LIMITS, META_PK, TABLE, ddb, effectiveStatus, epoch, error, inputKey, json, jobPk, log,
-  newId, parseBody, s3, type HttpEvent, type HttpResult, type Job,
+  listJobs, newId, parseBody, removeJob, s3, type HttpEvent, type HttpResult, type Job,
 } from './common.ts';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -112,22 +112,7 @@ function stats(values: number[]) {
 }
 
 async function dashboard(): Promise<HttpResult> {
-  // ponytail: lê todos os trabalhos do evento pelo GSI (≤ ~200 itens numa
-  // partição). Para volumes maiores, manter contadores agregados no META.
-  const jobs: Job[] = [];
-  let ExclusiveStartKey: Record<string, unknown> | undefined;
-  do {
-    const out = await ddb.send(new QueryCommand({
-      TableName: TABLE,
-      IndexName: 'byType',
-      KeyConditionExpression: 'gsi1pk = :j',
-      ExpressionAttributeValues: { ':j': 'JOB' },
-      ScanIndexForward: false,
-      ExclusiveStartKey,
-    }));
-    jobs.push(...((out.Items ?? []) as Job[]));
-    ExclusiveStartKey = out.LastEvaluatedKey;
-  } while (ExclusiveStartKey);
+  const jobs = await listJobs();
 
   const counts: Record<'participants' | 'synthetic', Record<string, number>> = { participants: {}, synthetic: {} };
   // Processadas = chegaram a COMPLETED, mesmo que a pessoa tenha excluído depois.
@@ -202,6 +187,60 @@ async function load(event: HttpEvent, rid: string): Promise<HttpResult> {
   return json(200, { created: created.length, stopped, jobIds: created });
 }
 
+// Escopos da limpeza: tudo (zera o painel), só sintéticos, ou criados antes de X minutos.
+const CLEANUP_MINUTES: Record<string, number> = { '15m': 15, '1h': 60, '3h': 180 };
+
+async function sessionKeys(): Promise<{ pk: string }[]> {
+  const keys: { pk: string }[] = [];
+  let ExclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const out = await ddb.send(new ScanCommand({
+      TableName: TABLE,
+      ProjectionExpression: 'pk',
+      FilterExpression: 'begins_with(pk, :s)',
+      ExpressionAttributeValues: { ':s': 'SESSION#' },
+      ExclusiveStartKey,
+    }));
+    keys.push(...((out.Items ?? []) as { pk: string }[]));
+    ExclusiveStartKey = out.LastEvaluatedKey;
+  } while (ExclusiveStartKey);
+  return keys;
+}
+
+/** Limpeza pelo painel. Com dryRun só conta; sem ele apaga arquivos (todas as
+ *  versões) e registros. "all" também apaga sessões e zera os contadores. */
+async function cleanup(event: HttpEvent, rid: string): Promise<HttpResult> {
+  const body = parseBody(event);
+  const scope = String(body.scope ?? '');
+  if (!(scope === 'all' || scope === 'synthetic' || scope in CLEANUP_MINUTES)) {
+    return error(400, 'SCOPE', 'scope deve ser all, synthetic, 15m, 1h ou 3h.', rid);
+  }
+  const cutoff = scope in CLEANUP_MINUTES ? new Date(Date.now() - CLEANUP_MINUTES[scope] * 60_000).toISOString() : '';
+  const jobs = (await listJobs()).filter((j) =>
+    scope === 'all' || (scope === 'synthetic' ? j.isSynthetic : j.createdAt < cutoff));
+  const sessions = scope === 'all' ? await sessionKeys() : [];
+
+  if (body.dryRun === true) return json(200, { scope, jobs: jobs.length, sessions: sessions.length, resetsCounters: scope === 'all' });
+
+  // Em lotes de 10 para caber nos 30 s da integração do API Gateway.
+  for (let i = 0; i < jobs.length; i += 10) await Promise.all(jobs.slice(i, i + 10).map(removeJob));
+  for (let i = 0; i < sessions.length; i += 25) {
+    await ddb.send(new BatchWriteCommand({
+      RequestItems: { [TABLE]: sessions.slice(i, i + 25).map((Key) => ({ DeleteRequest: { Key } })) },
+    }));
+  }
+  if (scope === 'all' || scope === 'synthetic') {
+    await ddb.send(new UpdateCommand({
+      TableName: TABLE,
+      Key: { pk: META_PK },
+      UpdateExpression: scope === 'all' ? 'SET sessions = :z, jobs = :z, synthetic = :z' : 'SET synthetic = :z',
+      ExpressionAttributeValues: { ':z': 0 },
+    }));
+  }
+  log('admin.cleanup', { scope, jobs: jobs.length, sessions: sessions.length, requestId: rid });
+  return json(200, { scope, jobs: jobs.length, sessions: sessions.length, resetsCounters: scope === 'all' });
+}
+
 export async function handler(event: HttpEvent): Promise<HttpResult> {
   const rid = event.requestContext.requestId;
   try {
@@ -218,6 +257,8 @@ export async function handler(event: HttpEvent): Promise<HttpResult> {
         log('admin.retryDemo', { jobId, requestId: rid });
         return json(201, { jobId });
       }
+      case 'POST /api/admin/cleanup':
+        return await cleanup(event, rid);
       case 'POST /api/admin/accepting': {
         const accepting = parseBody(event).accepting;
         if (typeof accepting !== 'boolean') return error(400, 'ACCEPTING', 'accepting deve ser booleano.', rid);

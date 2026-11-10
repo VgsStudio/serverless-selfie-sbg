@@ -1,13 +1,13 @@
 // API pública: sessão anônima, criação de trabalho, status, resultado e exclusão.
 // Sem login para participantes: a autorização é o cookie de sessão (token
 // aleatório, só o hash fica no banco) + o vínculo job.sessionId === sessão.
-import { DeleteCommand, GetCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { DeleteObjectsCommand, GetObjectCommand, ListObjectVersionsCommand } from '@aws-sdk/client-s3';
+import { GetCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import frames from './assets/frames.json' with { type: 'json' };
 import {
-  ALLOWED_ORIGIN, INPUT_BUCKET, LIMITS, META_PK, OUTPUT_BUCKET, TABLE, ddb, effectiveStatus, epoch, error,
+  ALLOWED_ORIGIN, INPUT_BUCKET, LIMITS, deleteJobObjects, removeJob, META_PK, OUTPUT_BUCKET, TABLE, ddb, effectiveStatus, epoch, error,
   inputKey, json, jobPk, log, newId, newToken, nowIso, outputKey, parseBody, s3, sessionPk, sha256,
   type HttpEvent, type HttpResult, type Job,
 } from './common.ts';
@@ -97,15 +97,6 @@ async function presignUpload(job: Job) {
     Expires: seconds,
   });
   return { url: post.url, fields: post.fields, expiresAt: job.uploadExpiresAt };
-}
-
-/** Apaga todas as versões de entrada e saída de um trabalho. */
-async function deleteJobObjects(jobId: string) {
-  for (const [Bucket, Prefix] of [[INPUT_BUCKET, `uploads/${jobId}/`], [OUTPUT_BUCKET, `outputs/${jobId}/`]]) {
-    const out = await s3.send(new ListObjectVersionsCommand({ Bucket, Prefix }));
-    const Objects = [...(out.Versions ?? []), ...(out.DeleteMarkers ?? [])].map((v) => ({ Key: v.Key!, VersionId: v.VersionId }));
-    if (Objects.length) await s3.send(new DeleteObjectsCommand({ Bucket, Delete: { Objects, Quiet: true } }));
-  }
 }
 
 async function markDeleted(jobId: string, sessionId: string) {
@@ -342,8 +333,7 @@ export async function sweep() {
       ExclusiveStartKey,
     }));
     for (const j of (out.Items ?? []) as Job[]) {
-      await deleteJobObjects(j.jobId);
-      await ddb.send(new DeleteCommand({ TableName: TABLE, Key: { pk: j.pk } }));
+      await removeJob(j);
       removed++;
     }
     ExclusiveStartKey = out.LastEvaluatedKey;

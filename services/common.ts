@@ -2,8 +2,8 @@
 // Tudo que é configurável chega por variável de ambiente definida no CDK.
 import { createHash, randomBytes } from 'node:crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
-import { S3Client } from '@aws-sdk/client-s3';
+import { DeleteCommand, DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DeleteObjectsCommand, ListObjectVersionsCommand, S3Client } from '@aws-sdk/client-s3';
 
 export const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
@@ -136,3 +136,38 @@ export function parseBody(event: HttpEvent): Record<string, unknown> {
 /** Log estruturado. Nunca passar token, cookie, URL assinada ou imagem aqui. */
 export const log = (msg: string, fields: Record<string, unknown> = {}) =>
   console.log(JSON.stringify({ msg, ...fields }));
+
+/** Todos os trabalhos do evento, mais novos primeiro (GSI byType).
+ *  ponytail: lê tudo numa partição (≤ ~200 itens); com volume real, agregados no META. */
+export async function listJobs(): Promise<Job[]> {
+  const jobs: Job[] = [];
+  let ExclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const out = await ddb.send(new QueryCommand({
+      TableName: TABLE,
+      IndexName: 'byType',
+      KeyConditionExpression: 'gsi1pk = :j',
+      ExpressionAttributeValues: { ':j': 'JOB' },
+      ScanIndexForward: false,
+      ExclusiveStartKey,
+    }));
+    jobs.push(...((out.Items ?? []) as Job[]));
+    ExclusiveStartKey = out.LastEvaluatedKey;
+  } while (ExclusiveStartKey);
+  return jobs;
+}
+
+/** Apaga todas as versões de entrada e saída de um trabalho. */
+export async function deleteJobObjects(jobId: string) {
+  for (const [Bucket, Prefix] of [[INPUT_BUCKET, `uploads/${jobId}/`], [OUTPUT_BUCKET, `outputs/${jobId}/`]]) {
+    const out = await s3.send(new ListObjectVersionsCommand({ Bucket, Prefix }));
+    const Objects = [...(out.Versions ?? []), ...(out.DeleteMarkers ?? [])].map((v) => ({ Key: v.Key!, VersionId: v.VersionId }));
+    if (Objects.length) await s3.send(new DeleteObjectsCommand({ Bucket, Delete: { Objects, Quiet: true } }));
+  }
+}
+
+/** Remove o trabalho por completo: arquivos (todas as versões) e registro. */
+export async function removeJob(job: Pick<Job, 'jobId' | 'pk'>) {
+  await deleteJobObjects(job.jobId);
+  await ddb.send(new DeleteCommand({ TableName: TABLE, Key: { pk: job.pk } }));
+}

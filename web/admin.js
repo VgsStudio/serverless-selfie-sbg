@@ -222,6 +222,29 @@ async function action(pending, fn, done) {
     'Atualizando', () => api('/accepting', { accepting: e.target.dataset.accepting !== 'true' }),
     (r) => (r.accepting ? 'Entrada reaberta.' : 'Entrada encerrada: novas sessões e selfies estão bloqueadas.'),
   ));
+  // Limpeza em dois passos: prévia (só conta) → confirmação → apaga.
+  $('#cleanup').addEventListener('click', async () => {
+    const scope = $('#cleanup-scope').value;
+    const label = $('#cleanup-scope').selectedOptions[0].textContent;
+    try {
+      const preview = await api('/cleanup', { scope, dryRun: true });
+      if (!preview.jobs && !preview.sessions && !preview.resetsCounters) {
+        $('#action-status').textContent = 'Nada para limpar nesse período.';
+        return;
+      }
+      const msg = `${label}
+
+Vai apagar ${preview.jobs} trabalho(s) com fotos e molduras`
+        + (preview.sessions ? ` e ${preview.sessions} sessão(ões)` : '')
+        + (preview.resetsCounters ? ', e zerar os contadores' : '')
+        + '. Não dá para desfazer. Continuar?';
+      if (!confirm(msg)) return;
+    } catch (e) {
+      return fail(e);
+    }
+    action('Limpando', () => api('/cleanup', { scope }),
+      (r) => `Limpeza concluída: ${r.jobs} trabalho(s)${r.sessions ? ` e ${r.sessions} sessão(ões)` : ''} apagados${r.resetsCounters ? ', contadores zerados' : ''}.`);
+  });
   $('#logout').addEventListener('click', logout);
 
   await refresh();

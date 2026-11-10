@@ -29,7 +29,8 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 export interface SelfieStackProps extends StackProps {
   zoneName: string;
-  hostedZoneId: string;
+  /** Opcional: sem ele, a zona é encontrada pelo nome (HostedZone.fromLookup). */
+  hostedZoneId?: string;
   domainName: string;
   cognitoDomainPrefix: string;
   eventEndsAt: string;
@@ -127,15 +128,15 @@ export class SelfieStack extends Stack {
     inputBucket.grantRead(renderFn, 'uploads/*');
     outputBucket.grantPut(renderFn, 'outputs/*');
     // API: assina upload (Put), assina download (Get) e apaga dados a pedido.
-    for (const f of [apiFn, sweepFn]) f.addToRolePolicy(new iam.PolicyStatement({
+    for (const f of [apiFn, sweepFn, adminFn]) f.addToRolePolicy(new iam.PolicyStatement({
       actions: ['s3:PutObject', 's3:DeleteObject', 's3:DeleteObjectVersion'],
       resources: [inputBucket.arnForObjects('uploads/*')],
     }));
-    for (const f of [apiFn, sweepFn]) f.addToRolePolicy(new iam.PolicyStatement({
+    for (const f of [apiFn, sweepFn, adminFn]) f.addToRolePolicy(new iam.PolicyStatement({
       actions: ['s3:GetObject', 's3:DeleteObject', 's3:DeleteObjectVersion'],
       resources: [outputBucket.arnForObjects('outputs/*')],
     }));
-    for (const f of [apiFn, sweepFn]) f.addToRolePolicy(new iam.PolicyStatement({
+    for (const f of [apiFn, sweepFn, adminFn]) f.addToRolePolicy(new iam.PolicyStatement({
       actions: ['s3:ListBucketVersions', 's3:ListBucket'],
       resources: [inputBucket.bucketArn, outputBucket.bucketArn],
     }));
@@ -324,13 +325,16 @@ export class SelfieStack extends Stack {
       ['/api/admin/stop', M.POST, true],
       ['/api/admin/retry-demo', M.POST, true],
       ['/api/admin/accepting', M.POST, true],
+      ['/api/admin/cleanup', M.POST, true],
     ];
     for (const [p, method, admin] of routes) {
       httpApi.addRoutes({ path: p, methods: [method], integration: admin ? adminInt : apiInt, ...(admin ? { authorizer } : {}) });
     }
 
     // ---------- Site: CloudFront com S3 (estático) e API na mesma origem ----------
-    const zone = route53.HostedZone.fromHostedZoneAttributes(this, 'Zone', { hostedZoneId: props.hostedZoneId, zoneName: props.zoneName });
+    const zone = props.hostedZoneId
+      ? route53.HostedZone.fromHostedZoneAttributes(this, 'Zone', { hostedZoneId: props.hostedZoneId, zoneName: props.zoneName })
+      : route53.HostedZone.fromLookup(this, 'Zone', { domainName: props.zoneName });
     const certificate = new acm.Certificate(this, 'Cert', { domainName: props.domainName, validation: acm.CertificateValidation.fromDns(zone) });
     const cognitoDomain = `https://${props.cognitoDomainPrefix}.auth.${this.region}.amazoncognito.com`;
     const csp = [
