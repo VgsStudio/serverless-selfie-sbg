@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Painel · Serverless Selfie SBG</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>λ</text></svg>">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Manrope:wght@400;600;800&family=JetBrains+Mono&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script src="admin.js" defer></script>
+</head>
+<body>
+  <main class="app admin">
+    <header class="hero">
+      <p class="eyebrow">Painel do apresentador</p>
+      <h1>Serverless Selfie <em>SBG</em></h1>
+      <p class="lead">Contagens agregadas, sem fotos e sem dados pessoais — pode ir para o telão.</p>
+    </header>
+
+    <p id="error" class="alert" role="alert" hidden></p>
+
+    <section id="login" class="card" hidden>
+      <h2>Acesso restrito</h2>
+      <p class="muted">Login com e-mail, senha e MFA (Cognito). Sem cadastro aberto.</p>
+      <button id="login-btn" class="btn primary" type="button">Entrar</button>
+    </section>
+
+    <section id="panel" hidden>
+      <div class="grid" id="stats"></div>
+
+      <div class="card">
+        <h2>Controles da demo</h2>
+        <div class="row">
+          <label>Lote <input id="count" type="number" min="1" max="20" value="20"></label>
+          <label>Intervalo (ms) <input id="interval" type="number" min="0" max="2000" step="100" value="500"></label>
+          <button id="load" class="btn primary" type="button">Executar lote de demonstração</button>
+          <button id="stop" class="btn" type="button">Parar lote</button>
+        </div>
+        <div class="row mt">
+          <button id="retry" class="btn" type="button">Demonstrar recuperação (falha controlada)</button>
+          <button id="accepting" class="btn ghost" type="button">…</button>
+          <button id="logout" class="btn ghost" type="button">Sair</button>
+        </div>
+        <p id="action-status" class="small muted"></p>
+      </div>
+
+      <div class="card">
+        <h2>Console AWS</h2>
+        <div class="row" id="links"></div>
+      </div>
+
+      <div class="card">
+        <h2>Trabalhos recentes</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>jobId</th><th>tipo</th><th>status</th><th>ponta a ponta</th><th>processamento</th><th>workflow</th></tr></thead>
+            <tbody id="jobs"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,9 @@
+node_modules/
+cdk.out/
+cdk.context.json
+.env
+.env.*
+!.env.example
+scripts/.cache/
+*.log
+.DS_Store

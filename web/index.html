@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Serverless Selfie SBG</title>
+  <meta name="description" content="Sua lembrança serverless da palestra “O que é arquitetura Serverless?” — Student Builder Group IMT, 14/11/2026.">
+  <meta name="theme-color" content="#1A0F3D">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>λ</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Manrope:wght@400;600;800&family=JetBrains+Mono&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <p class="eyebrow">Student Builder Group IMT · 14/11/2026</p>
+      <h1>O que é arquitetura <em>Serverless</em>?</h1>
+      <p class="lead">Tire uma selfie, gere sua moldura e leve a lembrança da palestra no celular.</p>
+    </header>
+
+    <p id="error" class="alert" role="alert" hidden></p>
+
+    <!-- 1. Escolher imagem -->
+    <section id="step-pick" class="card">
+      <h2>Escolha sua foto</h2>
+      <div class="actions">
+        <label class="btn primary">📸 Tirar selfie<input id="camera" type="file" accept="image/*" capture="user" hidden></label>
+        <label class="btn">🖼️ Escolher da galeria<input id="gallery" type="file" accept="image/*" hidden></label>
+        <button id="use-sample" class="btn ghost" type="button">Usar imagem de exemplo</button>
+      </div>
+      <details class="privacy" open>
+        <summary>Privacidade em 4 linhas</summary>
+        <ul>
+          <li>Sem cadastro nem login: o site cria uma sessão anônima só neste navegador.</li>
+          <li>A foto serve apenas para gerar a moldura. Nada de reconhecimento facial, galeria pública ou exibição no telão.</li>
+          <li>Foto e molduras ficam guardadas por <strong id="retention">24 horas</strong> e depois são apagadas. Dá para excluir antes, a qualquer momento.</li>
+          <li>Prefere não usar o rosto? A imagem de exemplo funciona igualzinho.</li>
+        </ul>
+      </details>
+    </section>
+
+    <!-- 2. Enquadrar -->
+    <section id="step-crop" class="card" hidden>
+      <h2>Enquadre</h2>
+      <p class="hint">Arraste a foto para ajustar o que aparece na moldura.</p>
+      <div id="crop" class="crop"><img id="crop-img" alt="Pré-visualização da foto escolhida" draggable="false"></div>
+      <div class="actions">
+        <button id="generate" class="btn primary" type="button">✨ Gerar minha moldura</button>
+        <button id="change" class="btn ghost" type="button">Trocar foto</button>
+      </div>
+    </section>
+
+    <!-- 3. Acompanhar -->
+    <section id="step-progress" class="card" hidden aria-live="polite">
+      <h2>Acompanhe sua selfie na nuvem</h2>
+      <ol class="timeline">
+        <li data-step="job"><b>API</b> cria o trabalho e autoriza o envio</li>
+        <li data-step="upload"><b>S3</b> recebe o arquivo direto do seu celular <span id="upload-pct"></span></li>
+        <li data-step="event"><b>EventBridge</b> avisa que um arquivo chegou</li>
+        <li data-step="process"><b>Step Functions + Lambda</b> geram as molduras</li>
+        <li data-step="done"><b>Pronto!</b> a API libera o download</li>
+      </ol>
+      <p class="mono small">trabalho <span id="job-id">—</span></p>
+      <button id="poll-again" class="btn" type="button" hidden>Consultar de novo</button>
+    </section>
+
+    <!-- 4. Resultado -->
+    <section id="step-result" class="card" hidden>
+      <h2>Sua lembrança está pronta 🎉</h2>
+      <img id="result-story" class="result" alt="Sua selfie na moldura da palestra, formato Story">
+      <div class="actions">
+        <button id="share-story" class="btn primary" type="button">Postar no Story do Instagram</button>
+        <button id="download-story" class="btn" type="button">Baixar imagem</button>
+        <button id="download-square" class="btn ghost" type="button">Baixar versão quadrada</button>
+      </div>
+      <div id="story-help" class="help" hidden>
+        <p><strong>Imagem salva.</strong> Agora é só abrir o Instagram, criar um Story e escolher a imagem na galeria.</p>
+        <a class="btn" href="https://www.instagram.com/" target="_blank" rel="noopener">Abrir Instagram</a>
+      </div>
+      <p class="small muted">No compartilhamento, quem escolhe os apps é o seu celular. Postar é opcional e nada é publicado automaticamente.</p>
+      <div class="actions">
+        <button id="again" class="btn ghost" type="button">Fazer outra</button>
+        <button id="delete-job" class="btn danger" type="button">Excluir esta foto</button>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <button id="delete-all" class="link" type="button">Excluir todos os meus dados</button>
+      <span>·</span>
+      <a class="link" href="https://github.com/VgsStudio/serverless-selfie-sbg" target="_blank" rel="noopener">Código e arquitetura</a>
+    </footer>
+  </main>
+</body>
+</html>

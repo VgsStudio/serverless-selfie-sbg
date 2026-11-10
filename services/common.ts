@@ -1,0 +1,137 @@
+// Código compartilhado pelas Lambdas: clientes AWS, limites e helpers HTTP.
+// Tudo que é configurável chega por variável de ambiente definida no CDK.
+import { createHash, randomBytes } from 'node:crypto';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import { S3Client } from '@aws-sdk/client-s3';
+
+export const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
+  marshallOptions: { removeUndefinedValues: true },
+});
+export const s3 = new S3Client({});
+
+const env = (name: string, fallback?: string) => {
+  const v = process.env[name] ?? fallback;
+  if (v === undefined) throw new Error(`variável de ambiente ausente: ${name}`);
+  return v;
+};
+
+export const TABLE = env('TABLE_NAME', 'test-table');
+export const INPUT_BUCKET = env('INPUT_BUCKET', 'test-input');
+export const OUTPUT_BUCKET = env('OUTPUT_BUCKET', 'test-output');
+
+export const LIMITS = {
+  maxUploadBytes: Number(env('MAX_UPLOAD_BYTES', String(8 * 1024 * 1024))),
+  maxPixels: Number(env('MAX_PIXELS', String(20_000_000))),
+  jobsPerSession: Number(env('JOBS_PER_SESSION', '3')),
+  maxJobs: Number(env('MAX_JOBS', '100')),
+  maxSessions: Number(env('MAX_SESSIONS', '100')),
+  maxSyntheticJobs: Number(env('MAX_SYNTHETIC_JOBS', '100')),
+  sessionSeconds: Number(env('SESSION_SECONDS', String(2 * 3600))),
+  retentionSeconds: Number(env('RETENTION_SECONDS', String(24 * 3600))),
+  uploadUrlSeconds: Number(env('UPLOAD_URL_SECONDS', '120')),
+  resultUrlSeconds: Number(env('RESULT_URL_SECONDS', '120')),
+  eventEndsAt: env('EVENT_ENDS_AT', '2026-11-15T02:59:59Z'),
+};
+
+export const ALLOWED_ORIGIN = env('ALLOWED_ORIGIN', 'https://localhost');
+
+// Chaves do DynamoDB (tabela única, atributo `pk`).
+export const META_PK = 'META#event';
+export const jobPk = (jobId: string) => `JOB#${jobId}`;
+export const sessionPk = (tokenHash: string) => `SESSION#${tokenHash}`;
+
+export const inputKey = (jobId: string) => `uploads/${jobId}/original`;
+export const outputKey = (jobId: string, format: string) => `outputs/${jobId}/${format}.jpg`;
+export const JOB_KEY_RE = /^uploads\/([a-f0-9]{32})\/original$/;
+
+export const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
+export const newToken = () => randomBytes(32).toString('base64url');
+export const newId = () => randomBytes(16).toString('hex');
+export const nowIso = () => new Date().toISOString();
+export const epoch = (ms = Date.now()) => Math.floor(ms / 1000);
+
+export type JobStatus =
+  | 'AWAITING_UPLOAD' | 'RECEIVED' | 'PROCESSING' | 'COMPLETED'
+  | 'FAILED' | 'EXPIRED' | 'DELETION_PENDING';
+
+export interface Job {
+  pk: string;
+  jobId: string;
+  sessionId: string;
+  status: JobStatus;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+  uploadExpiresAt: string;
+  contentType: string;
+  sizeBytes: number;
+  focusX: number;
+  focusY: number;
+  isSynthetic: boolean;
+  failOnce?: boolean;
+  failedOnce?: boolean;
+  inputVersionId?: string;
+  executionArn?: string;
+  receivedAt?: string;
+  completedAt?: string;
+  errorCode?: string;
+  leaseUntil?: number;
+  gsi1pk: 'JOB';
+  ttl: number;
+}
+
+/** Estado visto pelo cliente: prazos vencidos viram EXPIRED na leitura,
+ *  sem depender de quando o TTL/Lifecycle apagam fisicamente. */
+export function effectiveStatus(job: Pick<Job, 'status' | 'expiresAt' | 'uploadExpiresAt'>, now = Date.now()): JobStatus {
+  if (job.status === 'DELETION_PENDING') return job.status;
+  if (now > Date.parse(job.expiresAt)) return 'EXPIRED';
+  // Trabalho criado e nunca enviado: vence 5 min depois da autorização de upload.
+  if (job.status === 'AWAITING_UPLOAD' && now > Date.parse(job.uploadExpiresAt) + 5 * 60_000) return 'EXPIRED';
+  return job.status;
+}
+
+export interface HttpEvent {
+  rawPath: string;
+  routeKey: string;
+  headers: Record<string, string | undefined>;
+  cookies?: string[];
+  body?: string;
+  isBase64Encoded?: boolean;
+  pathParameters?: Record<string, string | undefined>;
+  requestContext: { requestId: string; http: { method: string } };
+}
+
+export interface HttpResult {
+  statusCode: number;
+  headers: Record<string, string>;
+  body: string;
+  cookies?: string[];
+}
+
+export function json(statusCode: number, body: unknown, cookies?: string[]): HttpResult {
+  return {
+    statusCode,
+    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+    body: JSON.stringify(body),
+    ...(cookies ? { cookies } : {}),
+  };
+}
+
+export const error = (statusCode: number, code: string, message: string, requestId: string) =>
+  json(statusCode, { error: code, message, requestId });
+
+export function parseBody(event: HttpEvent): Record<string, unknown> {
+  if (!event.body) return {};
+  const raw = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;
+  try {
+    const v = JSON.parse(raw);
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Log estruturado. Nunca passar token, cookie, URL assinada ou imagem aqui. */
+export const log = (msg: string, fields: Record<string, unknown> = {}) =>
+  console.log(JSON.stringify({ msg, ...fields }));
