@@ -117,7 +117,7 @@ function render(d) {
 
   renderLambda(d.lambda);
 
-  $('#accepting').textContent = d.meta.accepting ? '⏸ Encerrar entrada de novas selfies' : '▶ Reabrir entrada';
+  $('#accepting').textContent = d.meta.accepting ? 'Encerrar entrada de novas selfies' : 'Reabrir entrada';
   $('#accepting').dataset.accepting = String(d.meta.accepting);
 
   $('#jobs').replaceChildren(...d.recent.map((j) => {
@@ -208,18 +208,18 @@ async function action(pending, fn, done) {
   $('#load').addEventListener('click', () => action(
     'Enviando lote',
     () => api('/load', { count: Number($('#count').value), intervalMs: Number($('#interval').value) }),
-    (r) => `✓ ${r.created} trabalhos sintéticos enviados${r.stopped ? ' (lote interrompido)' : ''}. Acompanhe na tabela abaixo.`,
+    (r) => `${r.created} trabalhos sintéticos enviados${r.stopped ? ' (lote interrompido)' : ''}. Acompanhe na tabela abaixo.`,
   ));
   $('#stop').addEventListener('click', () => action(
-    'Parando', () => api('/stop', {}), () => '✓ Lote interrompido. Trabalhos já aceitos terminam normalmente.',
+    'Parando', () => api('/stop', {}), () => 'Lote interrompido. Trabalhos já aceitos terminam normalmente.',
   ));
   $('#retry').addEventListener('click', () => action(
     'Criando trabalho', () => api('/retry-demo', {}),
-    (r) => `✓ Trabalho ${r.jobId.slice(0, 12)}… criado: a etapa Story falha na 1ª tentativa e o Retry conclui na 2ª.`,
+    (r) => `Trabalho ${r.jobId.slice(0, 12)}… criado: a etapa Story falha na 1ª tentativa e o Retry conclui na 2ª.`,
   ));
   $('#accepting').addEventListener('click', (e) => action(
     'Atualizando', () => api('/accepting', { accepting: e.target.dataset.accepting !== 'true' }),
-    (r) => (r.accepting ? '✓ Entrada reaberta.' : '✓ Entrada encerrada: novas sessões e selfies estão bloqueadas.'),
+    (r) => (r.accepting ? 'Entrada reaberta.' : 'Entrada encerrada: novas sessões e selfies estão bloqueadas.'),
   ));
   $('#logout').addEventListener('click', logout);
 
