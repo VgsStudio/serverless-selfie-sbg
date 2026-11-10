@@ -419,7 +419,7 @@ web/
   style.css           paleta e tipografia da palestra
   sample.jpg          imagem de exemplo (ilustração própria, sem rosto)
 scripts/
-  build-frames.mjs    gera molduras e imagem de exemplo (Sora/Manrope, OFL)
+  build-frames.mjs    gera molduras e imagem de exemplo (identidade SBG, JetBrains Mono/Manrope)
   cleanup.mjs         limpeza pós-evento com dry-run
 tests/                node:test: imagem/estados + assertions do template CDK
 .github/workflows/    ci.yml (typecheck, testes, synth) e deploy.yml (manual, OIDC)
@@ -615,5 +615,6 @@ de cobrança) e use **Encerrar entrada** + limpeza ao final.
 - [MDN: Web Share API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Share_API), [`navigator.canShare`](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/canShare), [`navigator.share`](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share)
 - Case público citado na palestra: [Serverlesspresso](https://github.com/aws-samples/serverless-coffee)
 
-Fontes Sora e Manrope: SIL Open Font License, via Google Fonts. A aplicação não é produto
+Fontes JetBrains Mono e Manrope: SIL Open Font License, via Google Fonts. Paleta, grade,
+mosaico e ícone do chip vêm do template oficial do AWS Student Builder Group. A aplicação não é produto
 oficial nem tem endosso do Student Builder Group ou da AWS.
