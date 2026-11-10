@@ -145,30 +145,30 @@ function renderLambda(m) {
     $('#lambda-bars').replaceChildren();
     return;
   }
+  const period = $('#period').selectedOptions[0].textContent;
   const stats = [
-    [`${m.peak}${m.limit ? ` / ${m.limit}` : ''}`, 'pico simultâneo / limite da conta'],
-    [m.throttles, 'throttles (15 min)'],
-    [m.invocations, 'invocações (15 min)'],
+    [`${m.peak}${m.limit ? ` / ${m.limit}` : ''}`, `pico simultâneo / limite da conta (${period})`],
+    [m.throttles, `throttles (${period})`],
+    [m.invocations, `invocações (${period})`],
   ];
   $('#lambda-stats').replaceChildren(...stats.map(([v, label]) => {
     const box = el('div', undefined, { className: 'stat' });
     box.append(el('b', String(v)), el('span', label));
     return box;
   }));
-  // Uma barra por minuto; minuto sem dado = 0.
-  const byMinute = new Map(m.series.map((p) => [p.t.slice(0, 16), p.v]));
+  // Uma barra por intervalo (vem pronto do backend, sem buracos).
   const scale = Math.max(m.limit || 0, m.peak, 1);
-  const now = Date.now();
-  const bars = [];
-  for (let i = m.windowMinutes - 1; i >= 0; i--) {
-    const t = new Date(now - i * 60_000).toISOString().slice(0, 16);
-    const v = byMinute.get(t) ?? 0;
-    const bar = el('div', undefined, { title: `${t.slice(11)} UTC · ${v} simultâneas`, className: m.limit && v >= m.limit ? 'full' : '' });
+  const fmt = m.bucketSeconds >= 86400 ? { day: '2-digit', month: '2-digit' }
+    : m.bucketSeconds >= 3600 ? { day: '2-digit', hour: '2-digit', minute: '2-digit' } : { hour: '2-digit', minute: '2-digit' };
+  $('#lambda-bars').replaceChildren(...m.series.map(({ t, v }) => {
+    const label = new Date(t).toLocaleString('pt-BR', fmt);
+    const bar = el('div', undefined, { title: `${label} · pico de ${v} simultâneas`, className: m.limit && v >= m.limit ? 'full' : '' });
     bar.style.height = `${Math.max(2, (v / scale) * 100)}%`;
     if (v) bar.append(el('span', String(v)));
-    bars.push(bar);
-  }
-  $('#lambda-bars').replaceChildren(...bars);
+    return bar;
+  }));
+  const bucket = { 60: '1 minuto', 300: '5 minutos', 3600: '1 hora', 21600: '6 horas', 86400: '1 dia' }[m.bucketSeconds] ?? `${m.bucketSeconds} s`;
+  $('#lambda-caption').textContent = `ConcurrentExecutions (Maximum) da conta, uma barra a cada ${bucket}, ${period}. A barra laranja bateu no limite; acima dele, a AWS faz throttle e o Retry do workflow tenta de novo. O CloudWatch publica com 1–2 min de atraso.`;
 }
 
 async function refresh() {

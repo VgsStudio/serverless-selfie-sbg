@@ -16,14 +16,26 @@ const cw = new CloudWatchClient({});
 const lambdaClient = new LambdaClient({});
 let accountLimit: number | undefined;
 
-/** Concorrência de Lambda na conta, minuto a minuto, nos últimos 15 min.
- *  É a mesma métrica do dashboard (ConcurrentExecutions, Maximum), trazida
- *  para o painel. O CloudWatch publica com ~1–2 min de atraso. */
-async function lambdaMetrics() {
-  const end = new Date();
-  const start = new Date(end.getTime() - 15 * 60_000);
+// Granularidade do gráfico por período: ≤ 30 barras e dentro da retenção do
+// CloudWatch (dados de 1 min só existem por 15 dias).
+const METRIC_BUCKETS: Record<string, { minutes: number; bucketSeconds: number }> = {
+  '15m': { minutes: 15, bucketSeconds: 60 },
+  '1h': { minutes: 60, bucketSeconds: 300 },
+  '24h': { minutes: 1440, bucketSeconds: 3600 },
+  '7d': { minutes: 10080, bucketSeconds: 21600 },
+  '30d': { minutes: 43200, bucketSeconds: 86400 },
+};
+
+/** Concorrência de Lambda na conta no período: máximo por barra, throttles e
+ *  invocações somados. Mesma métrica do dashboard do CloudWatch (que publica
+ *  com ~1–2 min de atraso). Barras sem dado vêm com 0. */
+async function lambdaMetrics(period: string) {
+  const { minutes, bucketSeconds } = METRIC_BUCKETS[period] ?? METRIC_BUCKETS['1h'];
+  const bucketMs = bucketSeconds * 1000;
+  const end = new Date(Math.ceil(Date.now() / bucketMs) * bucketMs);
+  const start = new Date(end.getTime() - minutes * 60_000);
   const q = (Id: string, MetricName: string, Stat: string) =>
-    ({ Id, MetricStat: { Metric: { Namespace: 'AWS/Lambda', MetricName }, Period: 60, Stat } });
+    ({ Id, MetricStat: { Metric: { Namespace: 'AWS/Lambda', MetricName }, Period: bucketSeconds, Stat } });
   const out = await cw.send(new GetMetricDataCommand({
     StartTime: start,
     EndTime: end,
@@ -34,13 +46,16 @@ async function lambdaMetrics() {
   const total = (id: string) => (r[id]?.Values ?? []).reduce((a: number, b: number) => a + b, 0);
   accountLimit ??= (await lambdaClient.send(new GetAccountSettingsCommand({}))).AccountLimit?.ConcurrentExecutions;
   const conc: MetricDataResult = r.conc ?? {};
+  const byTime = new Map((conc.Timestamps ?? []).map((t: Date, i: number) => [t.getTime(), conc.Values![i]]));
+  const series = [];
+  for (let t = start.getTime(); t < end.getTime(); t += bucketMs) series.push({ t: new Date(t).toISOString(), v: byTime.get(t) ?? 0 });
   return {
-    windowMinutes: 15,
+    bucketSeconds,
     limit: accountLimit,
     peak: Math.max(0, ...(conc.Values ?? [])),
     throttles: total('thr'),
     invocations: total('inv'),
-    series: (conc.Timestamps ?? []).map((t: Date, i: number) => ({ t: t.toISOString(), v: conc.Values![i] })),
+    series,
   };
 }
 
@@ -138,7 +153,7 @@ async function dashboard(event: HttpEvent): Promise<HttpResult> {
 
   const [meta, lambda] = await Promise.all([
     getMeta(),
-    lambdaMetrics().catch((e) => { console.error(e); return null; }), // painel funciona mesmo sem métricas
+    lambdaMetrics(period).catch((e) => { console.error(e); return null; }), // painel funciona mesmo sem métricas
   ]);
   return json(200, {
     period: PERIOD_MINUTES[period] ? period : '1h',
