@@ -36,11 +36,17 @@ async function lambdaMetrics(period: string) {
   const start = new Date(end.getTime() - minutes * 60_000);
   const q = (Id: string, MetricName: string, Stat: string) =>
     ({ Id, MetricStat: { Metric: { Namespace: 'AWS/Lambda', MetricName }, Period: bucketSeconds, Stat } });
+  // Só as Lambdas desta stack (o nome físico começa com o nome da stack). O pico
+  // fica no nível da conta, porque é ele que disputa o limite de concorrência.
+  const app = (Id: string, MetricName: string) => ({
+    Id,
+    Expression: `SUM(SEARCH('{AWS/Lambda,FunctionName} MetricName="${MetricName}" ServerlessSelfie-App', 'Sum', ${bucketSeconds}))`,
+  });
   const out = await cw.send(new GetMetricDataCommand({
     StartTime: start,
     EndTime: end,
     ScanBy: 'TimestampAscending',
-    MetricDataQueries: [q('conc', 'ConcurrentExecutions', 'Maximum'), q('thr', 'Throttles', 'Sum'), q('inv', 'Invocations', 'Sum')],
+    MetricDataQueries: [q('conc', 'ConcurrentExecutions', 'Maximum'), app('thr', 'Throttles'), app('inv', 'Invocations')],
   }));
   const r: Record<string, MetricDataResult> = Object.fromEntries((out.MetricDataResults ?? []).map((m) => [m.Id, m]));
   const total = (id: string) => (r[id]?.Values ?? []).reduce((a: number, b: number) => a + b, 0);

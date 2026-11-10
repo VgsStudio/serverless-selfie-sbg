@@ -148,8 +148,8 @@ function renderLambda(m) {
   const period = $('#period').selectedOptions[0].textContent;
   const stats = [
     [`${m.peak}${m.limit ? ` / ${m.limit}` : ''}`, `pico simultâneo / limite da conta (${period})`],
-    [m.throttles, `throttles (${period})`],
-    [m.invocations, `invocações (${period})`],
+    [m.throttles, `throttles desta app (${period})`],
+    [m.invocations, `invocações desta app (${period})`],
   ];
   $('#lambda-stats').replaceChildren(...stats.map(([v, label]) => {
     const box = el('div', undefined, { className: 'stat' });
