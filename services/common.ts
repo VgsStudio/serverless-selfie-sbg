@@ -2,7 +2,7 @@
 // Tudo que é configurável chega por variável de ambiente definida no CDK.
 import { createHash, randomBytes } from 'node:crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DeleteCommand, DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { DeleteCommand, DynamoDBDocumentClient, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { DeleteObjectsCommand, ListObjectVersionsCommand, S3Client } from '@aws-sdk/client-s3';
 
 export const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
@@ -30,6 +30,8 @@ export const LIMITS = {
   sessionSeconds: Number(env('SESSION_SECONDS', String(2 * 3600))),
   // 45 min + varredura a cada 10 min (sweep) = nada fica mais de ~1 h.
   retentionSeconds: Number(env('RETENTION_SECONDS', String(45 * 60))),
+  // Registro anônimo (horários, status; sem foto nem token) para as estatísticas do painel.
+  statsSeconds: Number(env('STATS_SECONDS', String(30 * 24 * 3600))),
   uploadUrlSeconds: Number(env('UPLOAD_URL_SECONDS', '120')),
   resultUrlSeconds: Number(env('RESULT_URL_SECONDS', '120')),
   eventEndsAt: env('EVENT_ENDS_AT', '2026-11-15T02:59:59Z'),
@@ -78,9 +80,13 @@ export interface Job {
   completedAt?: string;
   errorCode?: string;
   leaseUntil?: number;
+  purgedAt?: string;
   gsi1pk: 'JOB';
   ttl: number;
 }
+
+/** TTL do registro anônimo (estatística), não da foto. */
+export const statsTtl = (ms = Date.now()) => epoch(ms + LIMITS.statsSeconds * 1000);
 
 /** Estado visto pelo cliente: prazos vencidos viram EXPIRED na leitura,
  *  sem depender de quando o TTL/Lifecycle apagam fisicamente. */
@@ -100,6 +106,7 @@ export interface HttpEvent {
   body?: string;
   isBase64Encoded?: boolean;
   pathParameters?: Record<string, string | undefined>;
+  queryStringParameters?: Record<string, string | undefined>;
   requestContext: { requestId: string; http: { method: string } };
 }
 
@@ -139,19 +146,24 @@ export const log = (msg: string, fields: Record<string, unknown> = {}) =>
 
 /** Todos os trabalhos do evento, mais novos primeiro (GSI byType).
  *  ponytail: lê tudo numa partição (≤ ~200 itens); com volume real, agregados no META. */
-export async function listJobs(): Promise<Job[]> {
-  const jobs: Job[] = [];
+export async function listJobs(sinceIso?: string): Promise<Job[]> {
+  return listByType<Job>('JOB', sinceIso);
+}
+
+/** Itens do GSI byType (JOB ou SESSION), opcionalmente só os criados desde `sinceIso`. */
+export async function listByType<T>(type: 'JOB' | 'SESSION', sinceIso?: string): Promise<T[]> {
+  const jobs: T[] = [];
   let ExclusiveStartKey: Record<string, unknown> | undefined;
   do {
     const out = await ddb.send(new QueryCommand({
       TableName: TABLE,
       IndexName: 'byType',
-      KeyConditionExpression: 'gsi1pk = :j',
-      ExpressionAttributeValues: { ':j': 'JOB' },
+      KeyConditionExpression: sinceIso ? 'gsi1pk = :j AND createdAt >= :since' : 'gsi1pk = :j',
+      ExpressionAttributeValues: sinceIso ? { ':j': type, ':since': sinceIso } : { ':j': type },
       ScanIndexForward: false,
       ExclusiveStartKey,
     }));
-    jobs.push(...((out.Items ?? []) as Job[]));
+    jobs.push(...((out.Items ?? []) as T[]));
     ExclusiveStartKey = out.LastEvaluatedKey;
   } while (ExclusiveStartKey);
   return jobs;
@@ -170,4 +182,17 @@ export async function deleteJobObjects(jobId: string) {
 export async function removeJob(job: Pick<Job, 'jobId' | 'pk'>) {
   await deleteJobObjects(job.jobId);
   await ddb.send(new DeleteCommand({ TableName: TABLE, Key: { pk: job.pk } }));
+}
+
+/** Vencido: apaga foto e molduras (todas as versões) e mantém só o registro
+ *  anônimo do trabalho para as estatísticas, até o TTL de 30 dias. */
+export async function purgeJob(job: Pick<Job, 'jobId' | 'pk'>) {
+  await deleteJobObjects(job.jobId);
+  await ddb.send(new UpdateCommand({
+    TableName: TABLE,
+    Key: { pk: job.pk },
+    UpdateExpression: 'SET purgedAt = :now',
+    ConditionExpression: 'attribute_exists(pk)',
+    ExpressionAttributeValues: { ':now': nowIso() },
+  })).catch((e) => { if ((e as Error).name !== 'ConditionalCheckFailedException') throw e; });
 }

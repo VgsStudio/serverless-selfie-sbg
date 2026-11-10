@@ -27,6 +27,18 @@
     </section>
 
     <section id="panel" hidden>
+      <div class="row period">
+        <label>Mostrar
+          <select id="period">
+            <option value="15m">últimos 15 minutos</option>
+            <option value="1h" selected>última 1 hora</option>
+            <option value="24h">últimas 24 horas</option>
+            <option value="7d">últimos 7 dias</option>
+            <option value="30d">últimos 30 dias</option>
+          </select>
+        </label>
+        <span class="small muted">Fotos somem em até 1 h; o registro anônimo (horário e status) fica 30 dias.</span>
+      </div>
       <div class="grid" id="stats"></div>
 
       <div class="card">
@@ -49,18 +61,22 @@
           <button id="accepting" class="btn ghost" type="button">…</button>
           <button id="logout" class="btn ghost" type="button">Sair</button>
         </div>
+        <details class="maintenance mt">
+          <summary>Manutenção: apagar dados e zerar os limites do evento</summary>
+          <p class="small muted">Os ensaios consomem os limites do evento (100 selfies e 100 sessões). "Tudo" apaga os registros e zera esses contadores.</p>
         <div class="row mt">
-          <label>Limpar
+          <label>Apagar
             <select id="cleanup-scope">
-              <option value="all">Tudo: zera o painel (selfies, sessões e contadores)</option>
+              <option value="all">Tudo: registros, sessões e contadores de limite</option>
               <option value="synthetic">Só os trabalhos sintéticos (lotes e falha controlada)</option>
               <option value="15m">Criados há mais de 15 minutos</option>
               <option value="1h">Criados há mais de 1 hora</option>
               <option value="3h">Criados há mais de 3 horas</option>
             </select>
           </label>
-          <button id="cleanup" class="btn danger" type="button">Limpar dados</button>
+          <button id="cleanup" class="btn danger" type="button">Apagar</button>
         </div>
+        </details>
         <p id="action-status" class="small muted"></p>
       </div>
 

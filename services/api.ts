@@ -7,7 +7,7 @@ import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import frames from './assets/frames.json' with { type: 'json' };
 import {
-  ALLOWED_ORIGIN, INPUT_BUCKET, LIMITS, deleteJobObjects, removeJob, META_PK, OUTPUT_BUCKET, TABLE, ddb, effectiveStatus, epoch, error,
+  ALLOWED_ORIGIN, INPUT_BUCKET, LIMITS, deleteJobObjects, purgeJob, statsTtl, META_PK, OUTPUT_BUCKET, TABLE, ddb, effectiveStatus, epoch, error,
   inputKey, json, jobPk, log, newId, newToken, nowIso, outputKey, parseBody, s3, sessionPk, sha256,
   type HttpEvent, type HttpResult, type Job,
 } from './common.ts';
@@ -25,6 +25,7 @@ interface Session {
   revokedAt?: string;
   jobIds: string[];
   jobCount: number;
+  gsi1pk: 'SESSION';
   ttl: number;
 }
 
@@ -133,7 +134,8 @@ async function createSession(event: HttpEvent, rid: string): Promise<HttpResult>
     expiresAt: new Date(expiresMs).toISOString(),
     jobIds: [],
     jobCount: 0,
-    ttl: epoch(now + LIMITS.retentionSeconds * 1000),
+    gsi1pk: 'SESSION',
+    ttl: statsTtl(now),
   };
   try {
     await ddb.send(new TransactWriteCommand({
@@ -206,7 +208,7 @@ async function createJob(event: HttpEvent, session: Session, rid: string): Promi
     focusY: fy,
     isSynthetic: false,
     gsi1pk: 'JOB',
-    ttl: epoch(now + LIMITS.retentionSeconds * 1000),
+    ttl: statsTtl(now),
   };
   try {
     // Reserva de cota por sessão e global na mesma transação: requisições
@@ -316,9 +318,9 @@ export async function handler(event: HttpEvent): Promise<HttpResult> {
   }
 }
 
-/** Varredura agendada (EventBridge, a cada 10 min): apaga fotos, molduras e o
- *  registro dos trabalhos vencidos. Com retenção de 45 min, nada passa de ~1 h.
- *  TTL do DynamoDB e Lifecycle do S3 ficam só como rede de segurança. */
+/** Varredura agendada (EventBridge, a cada 10 min): apaga foto e molduras dos
+ *  trabalhos vencidos (45 min) — nada passa de ~1 h. O registro anônimo fica
+ *  para as estatísticas até o TTL (30 dias). Lifecycle do S3 é rede de segurança. */
 export async function sweep() {
   const now = nowIso();
   let removed = 0;
@@ -328,12 +330,12 @@ export async function sweep() {
       TableName: TABLE,
       IndexName: 'byType',
       KeyConditionExpression: 'gsi1pk = :j',
-      FilterExpression: 'expiresAt < :now',
+      FilterExpression: 'expiresAt < :now AND attribute_not_exists(purgedAt)',
       ExpressionAttributeValues: { ':j': 'JOB', ':now': now },
       ExclusiveStartKey,
     }));
     for (const j of (out.Items ?? []) as Job[]) {
-      await removeJob(j);
+      await purgeJob(j);
       removed++;
     }
     ExclusiveStartKey = out.LastEvaluatedKey;

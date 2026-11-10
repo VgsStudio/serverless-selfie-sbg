@@ -327,10 +327,11 @@ só para o painel.
 - Buckets privados (Block Public Access), SSE-S3, TLS obrigatório; imagens só por URL assinada
   de 2 minutos.
 - Logs JSON com `jobId`/`requestId`; **nunca** foto, cookie, token ou URL assinada.
-- Retenção: **até 1 hora**. O trabalho vence em 45 min (acesso negado na leitura) e uma Lambda
-  agendada a cada 10 min apaga foto, molduras (todas as versões) e o registro. TTL e Lifecycle
-  (incluindo versões antigas) ficam como
-  limpeza física.
+- Retenção: **foto e molduras em até 1 hora**. O trabalho vence em 45 min (acesso negado na
+  leitura) e uma Lambda agendada a cada 10 min apaga foto e molduras (todas as versões). Fica só
+  um registro anônimo (horários, status, sintético ou não; sem foto, sem token) por 30 dias, que
+  alimenta o filtro de período do painel. Lifecycle do S3 e TTL do DynamoDB ficam como rede de
+  segurança.
 - Sem reconhecimento facial, sem galeria pública, nenhuma selfie no telão sem autorização.
 - Antes de gerar, o site avisa que quem envia se responsabiliza pela imagem, que o projeto é
   educativo/de demonstração e que tudo é apagado em até 1 hora.
@@ -369,7 +370,8 @@ por variável de ambiente nas Lambdas.
 | Trabalhos sintéticos | 100 (lote ≤ 20) | `MAX_SYNTHETIC_JOBS` |
 | Sessão | 2 h, até o fim do evento | `SESSION_SECONDS`, `EVENT_ENDS_AT` |
 | Autorização de upload / URL de resultado | 2 min / 2 min | `UPLOAD_URL_SECONDS`, `RESULT_URL_SECONDS` |
-| Retenção de dados | 45 min + varredura a cada 10 min (≤ 1 h) | `RETENTION_SECONDS` |
+| Retenção de foto e molduras | 45 min + varredura a cada 10 min (≤ 1 h) | `RETENTION_SECONDS` |
+| Registro anônimo (horário, status; sem foto nem token) | 30 dias, para o filtro de período do painel | `STATS_SECONDS` |
 | Logs | 7 dias | CDK |
 | Polling no site | 2 s → 6 s, para em 2 min | `web/app.js` |
 
@@ -380,8 +382,8 @@ nenhuma sessão nova é criada.
 
 ## Observabilidade e demo de escala
 
-**Painel do apresentador (`/admin.html`):** contadores agregados (sessões, selfies da turma
-processadas e excluídas, sintéticos, falhas definitivas, duração ponta a ponta média e p95 do
+**Painel do apresentador (`/admin.html`):** contadores agregados **por período** (últimos 15 min, 1 h, 24 h, 7 dias ou 30 dias: sessões,
+selfies da turma processadas e excluídas, sintéticos, falhas definitivas, duração ponta a ponta média e p95 do
 processamento), o gráfico **Lambdas em execução ao mesmo tempo** (por minuto, últimos 15 min,
 com pico × limite da conta, throttles e invocações, lidos do CloudWatch), tabela dos
 últimos trabalhos com link direto para a **execução no Step Functions**, atalhos para S3,

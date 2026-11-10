@@ -20,11 +20,18 @@ function fail(err) {
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
+// 429/5xx = throttle ou falha temporária (ex.: Lambdas ocupadas no lote da demo):
+// espera e tenta de novo até 3 vezes. É seguro: criar trabalho usa Idempotency-Key.
 async function api(path, options = {}) {
-  const res = await fetch(`/api${path}`, {
-    ...options,
-    headers: { 'content-type': 'application/json', ...(options.headers || {}) },
-  });
+  let res;
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch(`/api${path}`, {
+      ...options,
+      headers: { 'content-type': 'application/json', ...(options.headers || {}) },
+    });
+    if (!(res.status === 429 || res.status >= 500) || attempt === 3) break;
+    await sleep(800 * 2 ** attempt);
+  }
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(body.message || `Erro ${res.status}`), { status: res.status, code: body.error });
   return body;

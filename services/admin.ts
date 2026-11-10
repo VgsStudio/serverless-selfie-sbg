@@ -8,7 +8,7 @@ import { GetAccountSettingsCommand, LambdaClient } from '@aws-sdk/client-lambda'
 import sample from '../web/sample.jpg';
 import {
   INPUT_BUCKET, LIMITS, META_PK, TABLE, ddb, effectiveStatus, epoch, error, inputKey, json, jobPk, log,
-  listJobs, newId, parseBody, removeJob, s3, type HttpEvent, type HttpResult, type Job,
+  listByType, listJobs, newId, statsTtl, parseBody, removeJob, s3, type HttpEvent, type HttpResult, type Job,
 } from './common.ts';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -79,7 +79,7 @@ async function createSynthetic(failOnce: boolean): Promise<string> {
     isSynthetic: true,
     failOnce,
     gsi1pk: 'JOB',
-    ttl: epoch(now + LIMITS.retentionSeconds * 1000),
+    ttl: statsTtl(now),
   };
   await ddb.send(new TransactWriteCommand({
     TransactItems: [
@@ -111,8 +111,14 @@ function stats(values: number[]) {
   };
 }
 
-async function dashboard(): Promise<HttpResult> {
-  const jobs = await listJobs();
+// Períodos do filtro do painel.
+const PERIOD_MINUTES: Record<string, number> = { '15m': 15, '1h': 60, '24h': 1440, '7d': 10080, '30d': 43200 };
+
+async function dashboard(event: HttpEvent): Promise<HttpResult> {
+  const period = event.queryStringParameters?.period ?? '1h';
+  const minutes = PERIOD_MINUTES[period] ?? PERIOD_MINUTES['1h'];
+  const since = new Date(Date.now() - minutes * 60_000).toISOString();
+  const [jobs, sessions] = await Promise.all([listJobs(since), listByType<{ createdAt: string }>('SESSION', since)]);
 
   const counts: Record<'participants' | 'synthetic', Record<string, number>> = { participants: {}, synthetic: {} };
   // Processadas = chegaram a COMPLETED, mesmo que a pessoa tenha excluído depois.
@@ -135,6 +141,8 @@ async function dashboard(): Promise<HttpResult> {
     lambdaMetrics().catch((e) => { console.error(e); return null; }), // painel funciona mesmo sem métricas
   ]);
   return json(200, {
+    period: PERIOD_MINUTES[period] ? period : '1h',
+    sessionsInPeriod: sessions.length,
     meta: {
       sessions: meta.sessions ?? 0,
       jobs: meta.jobs ?? 0,
@@ -246,7 +254,7 @@ export async function handler(event: HttpEvent): Promise<HttpResult> {
   try {
     switch (event.routeKey) {
       case 'GET /api/admin/dashboard':
-        return await dashboard();
+        return await dashboard(event);
       case 'POST /api/admin/load':
         return await load(event, rid);
       case 'POST /api/admin/stop':

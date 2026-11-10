@@ -142,3 +142,5 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
 .btn.danger { border-color: var(--danger); }
 .check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--muted); }
 .check input { margin-top: 3px; width: 18px; height: 18px; flex: none; }
+.period { margin-bottom: 12px; }
+.maintenance summary { cursor: pointer; font-weight: 800; color: var(--muted); }

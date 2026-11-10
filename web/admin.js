@@ -67,11 +67,17 @@ async function idToken() {
 async function api(path, body) {
   const jwt = await idToken();
   if (!jwt) { showLogin(); throw new Error('Sessão expirada, entre de novo.'); }
-  const res = await fetch(`/api/admin${path}`, {
-    method: body ? 'POST' : 'GET',
-    headers: { authorization: `Bearer ${jwt}`, 'content-type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  // GET (refresh) tenta de novo em throttle; ações (POST) não, para não duplicar lote.
+  let res;
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch(`/api/admin${path}`, {
+      method: body ? 'POST' : 'GET',
+      headers: { authorization: `Bearer ${jwt}`, 'content-type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (body || !(res.status === 429 || res.status >= 500) || attempt === 2) break;
+    await new Promise((r) => setTimeout(r, 800 * 2 ** attempt));
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || `Erro ${res.status}`);
   return data;
@@ -98,7 +104,7 @@ function render(d) {
   const p = d.counts.participants;
   const s = d.counts.synthetic;
   const stats = [
-    [d.meta.sessions, 'sessões anônimas'],
+    [d.sessionsInPeriod, 'sessões anônimas'],
     [sum(p), 'selfies da turma'],
     [d.processed.participants, 'da turma processadas'],
     [(p.PROCESSING ?? 0) + (p.RECEIVED ?? 0), 'da turma processando'],
@@ -167,7 +173,7 @@ function renderLambda(m) {
 
 async function refresh() {
   try {
-    render(await api('/dashboard'));
+    render(await api(`/dashboard?period=${encodeURIComponent($('#period').value)}`));
     $('#error').hidden = true;
   } catch (e) {
     fail(e);
@@ -244,6 +250,12 @@ Vai apagar ${preview.jobs} trabalho(s) com fotos e molduras`
     }
     action('Limpando', () => api('/cleanup', { scope }),
       (r) => `Limpeza concluída: ${r.jobs} trabalho(s)${r.sessions ? ` e ${r.sessions} sessão(ões)` : ''} apagados${r.resetsCounters ? ', contadores zerados' : ''}.`);
+  });
+  // Período do painel: lembrado neste navegador (conveniência, não é dado).
+  try { const p = localStorage.getItem('selfie-admin:period'); if (p) $('#period').value = p; } catch {}
+  $('#period').addEventListener('change', () => {
+    try { localStorage.setItem('selfie-admin:period', $('#period').value); } catch {}
+    refresh();
   });
   $('#logout').addEventListener('click', logout);
 
