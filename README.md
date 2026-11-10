@@ -421,6 +421,7 @@ services/
   assets/             molduras PNG + frames.json (gerados por scripts/build-frames.mjs)
 web/
   index.html app.js   site público (vanilla, sem build)
+  custos.html custos.js  calculadora de custo por selfie (consumo medido × preço oficial)
   admin.html admin.js painel com login Cognito (PKCE)
   style.css           paleta e tipografia da palestra
   sample.jpg          imagem de exemplo (ilustração própria, sem rosto)
@@ -572,13 +573,26 @@ exemplo. Compartilhar falhou → baixar. Tudo falhou → gravação, dita como g
 
 ## Custos
 
-Não há preço fechado: depende da região, do volume do ensaio + evento e dos benefícios da conta.
-O que gera custo, por selfie: chamadas à API (incluindo polling), invocações e GB-s das Lambdas
-(o `render` usa 2 GB por alguns segundos, duas vezes), transições do Step Functions Standard,
-leituras/escritas no DynamoDB, PUT/GET e armazenamento no S3 (por até 1 h), transferência via
-CloudFront e logs/métricas. Para ~10 pessoas + ensaios o volume é pequeno, mas **serverless
-não é sinônimo de grátis**: crie um alerta no AWS Budgets antes do evento (alerta não é teto
-de cobrança) e use **Encerrar entrada** + limpeza ao final.
+Calculadora pública: **`/custos.html`**. Ela cruza o **consumo medido no ensaio** (CloudWatch,
+26 execuções) com os **preços oficiais de us-east-1** (AWS Price List API, 10/11/2026), sem
+Free Tier e sem créditos, ou seja, o preço cheio.
+
+| | |
+|---|---|
+| **Média por selfie** | **≈ US$ 0,0004** (4 centésimos de centavo de dólar) |
+| 100 selfies | ≈ US$ 0,04 |
+| Maior fatia | **Step Functions (~50%)**: 8 transições × US$ 0,000025 |
+| Segunda | Lambda de render (~25%): 2 × ~1,9 s × 2 GB |
+
+O resto (S3, transferência, CloudFront, DynamoDB, API Gateway, logs) soma o último quarto.
+Um bom gancho para a palestra: o custo dominante é a **orquestração**, não o processamento de
+imagem. Num volume alto, um workflow **Express** ou menos estados mudariam essa conta.
+
+Ficam de fora os custos fixos, que não dependem de selfie: o dashboard do CloudWatch (US$ 3/mês;
+os 3 primeiros da conta são grátis) e o alarme (US$ 0,10/mês). **Serverless não é sinônimo de
+grátis**: com créditos a fatura pode vir zerada, mas o consumo existe. Crie um alerta no AWS
+Budgets antes do evento (alerta não é teto de cobrança) e use **Encerrar entrada** + limpeza ao
+final.
 
 ---
 

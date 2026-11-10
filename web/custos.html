@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Quanto custa uma selfie? · Serverless Selfie SBG</title>
+  <meta name="description" content="Calculadora do custo AWS das selfies da palestra, com consumo medido e preços oficiais de us-east-1.">
+  <meta name="theme-color" content="#1A0F3D">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤓</text></svg>">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Manrope:wght@400;600;800&family=JetBrains+Mono&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script src="custos.js" defer></script>
+</head>
+<body>
+  <main class="app admin">
+    <header class="hero">
+      <p class="eyebrow">Serverless Selfie SBG</p>
+      <h1>Quanto custa <em>uma selfie</em>?</h1>
+      <p class="lead">Consumo medido no ensaio da demo × preços oficiais da AWS em us-east-1. Sem Free Tier e sem créditos: é o preço cheio.</p>
+    </header>
+
+    <section class="card">
+      <h2>Calculadora</h2>
+      <div class="row">
+        <label>Selfies <input id="selfies" type="number" min="1" step="1" value="100"></label>
+        <label>Consultas de status por selfie <input id="polls" type="number" min="0" step="1" value="4"></label>
+        <label>Selfies por pessoa <input id="per-session" type="number" min="1" step="1" value="2"></label>
+        <label>Câmbio US$ → R$ <input id="fx" type="number" min="0" step="0.01" value="5.50"></label>
+      </div>
+      <div class="grid mt" id="totals"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Serviço</th><th>O que é cobrado</th><th>Quantidade</th><th>US$</th><th>%</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Como o número foi calculado</h2>
+      <ul class="small muted">
+        <li><strong>Consumo:</strong> medido no CloudWatch em 10/11/2026 (26 execuções do workflow). Cada selfie gera 2 renderizações de ~1,9 s numa Lambda de 2 GB, 1 claim (~0,12 s) e 1 validação (~0,2 s) de 256 MB, e 8 transições no Step Functions.</li>
+        <li><strong>Preços:</strong> AWS Price List API, região us-east-1, consultada em 10/11/2026. Lambda ARM, API Gateway HTTP API, Step Functions Standard, DynamoDB on-demand, S3 Standard, transferência do S3 para a internet, CloudFront (visitantes na América do Sul) e ingestão de logs do CloudWatch.</li>
+        <li><strong>Fica de fora:</strong> custos fixos que não dependem de selfie, como o dashboard do CloudWatch (US$ 3/mês, os 3 primeiros da conta são grátis) e o alarme (US$ 0,10/mês). Eventos do S3 no EventBridge não são cobrados. O armazenamento de até 1 hora custa uma fração de centavo.</li>
+        <li><strong>Free Tier:</strong> com créditos ou franquias da conta, o valor pago pode ser zero. Mas zero na fatura não quer dizer zero de consumo: serverless não é sinônimo de grátis.</li>
+        <li><strong>Câmbio:</strong> valor de referência, ajuste para o dia.</li>
+      </ul>
+    </section>
+
+    <footer class="foot">
+      <a class="link" href="./">Voltar para a selfie</a>
+      <span>·</span>
+      <a class="link" href="https://github.com/VgsStudio/serverless-selfie-sbg" target="_blank" rel="noopener">Código e arquitetura</a>
+    </footer>
+  </main>
+</body>
+</html>

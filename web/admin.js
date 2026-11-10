@@ -202,6 +202,7 @@ async function action(pending, fn, done) {
     ['S3 entrada', `https://s3.console.aws.amazon.com/s3/buckets/${cfg.inputBucket}?region=${cfg.region}&prefix=uploads/`],
     ['S3 saída', `https://s3.console.aws.amazon.com/s3/buckets/${cfg.outputBucket}?region=${cfg.region}&prefix=outputs/`],
     ['DynamoDB', consoleUrl('dynamodbv2', `item-explorer?table=${cfg.tableName}`)],
+    ['Calculadora de custo', 'custos.html'],
   ];
   $('#links').replaceChildren(...links.map(([t, href]) => el('a', t, { href, target: '_blank', rel: 'noopener', className: 'btn ghost' })));
 
