@@ -442,56 +442,74 @@ Para mudar a moldura (texto, cores, arte do grupo), edite `scripts/build-frames.
 
 ## Deploy
 
-### Pré-requisitos
+O deploy é feito **só pelo GitHub Actions**, autenticado por OIDC: não existe access key, e
+nenhum ID de conta, zona ou ARN fica no código. Esses valores ficam em **Variables** do
+repositório (*Settings → Secrets and variables → Actions*), lidos pelo workflow como
+`${{ vars.NOME }}`. Localmente, o `.env` (ignorado pelo git) serve apenas para `cdk diff`.
 
-- Conta AWS com `cdk bootstrap` feito em `us-east-1` (o mesmo dos outros projetos).
-- Hosted zone de `vsoller.com.br` no Route 53 (já existe).
-- Perfil AWS local com permissão de deploy (`aws sso login` ou equivalente).
+### Pré-requisitos (já atendidos na conta)
 
-### Primeira vez (local)
+- `cdk bootstrap` feito em `us-east-1`.
+- Provedor OIDC do GitHub (`token.actions.githubusercontent.com`) cadastrado no IAM.
+- Hosted zone de `vsoller.com.br` no Route 53.
+
+### Configuração do repositório
+
+| Variable | Conteúdo |
+|---|---|
+| `AWS_DEPLOY_ROLE_ARN` | ARN do papel `github-actions-serverless-selfie-deploy` |
+| `HOSTED_ZONE_ID` | ID da hosted zone de `vsoller.com.br` |
+| `REPO_OIDC_CLAIM` | claim imutável do repo: `gh api repos/VgsStudio/serverless-selfie-sbg --jq '"\(.owner.login)@\(.owner.id)/\(.name)@\(.id)"'` |
+
+Mais o ambiente **`event`** (*Settings → Environments*), usado pelo job de deploy. Dá para
+exigir aprovação manual nele.
+
+São **variables**, não secrets: nenhum desses valores dá acesso a nada sozinho. A confiança
+está na política OIDC do papel, restrita à branch `main` **deste** repositório.
+
+### Primeira vez: criar o papel do GitHub (uma única vez)
+
+O GitHub só consegue assumir o papel depois que ele existe, então ele precisa ser criado uma
+vez por alguém com acesso à conta. É a única ação fora do Actions, e cria só um papel IAM:
 
 ```bash
-cp .env.example .env            # preencha HOSTED_ZONE_ID (o .env é ignorado pelo git)
-npm ci
-npm run cdk:diff
-npm run deploy                  # cria certificado (validação DNS automática), CDN, API, etc.
+# .env com HOSTED_ZONE_ID e GITHUB_REPO_CLAIM (ver .env.example)
+npx cdk deploy ServerlessSelfie-Oidc
 ```
 
-O certificado ACM é emitido e validado por DNS na própria stack (alguns minutos no primeiro
-deploy). Nada do site principal é alterado; a stack só cria os registros `serverless-selfie` na zona.
+A partir daí, o próprio workflow mantém esse papel (`cdk deploy --all`).
+
+### Rodar o deploy
+
+*Actions → Deploy → Run workflow* (ou `gh workflow run Deploy`). O workflow não dispara em
+push: deploy de evento ao vivo é decisão humana. Ele roda os testes e depois o `cdk deploy`.
+
+No primeiro deploy, o certificado ACM é emitido e validado por DNS dentro da própria stack, o
+que leva alguns minutos. Nada do site principal é alterado; a stack só cria os registros
+`serverless-selfie` na zona.
+
+O workflow **CI** roda em todo PR e push: typecheck, testes e `cdk synth` com valores
+fictícios, sem credenciais.
 
 ### Criar o usuário do painel
 
 O pool não aceita cadastro. Crie o único usuário pela CLI (o e-mail fica só na AWS):
 
 ```bash
-POOL_ID=$(aws cloudformation describe-stacks --stack-name ServerlessSelfie-App \
-  --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text)
+POOL_ID=$(aws cloudformation describe-stacks --stack-name ServerlessSelfie-App   --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text)
 
-aws cognito-idp admin-create-user --user-pool-id "$POOL_ID" \
-  --username "<seu-email>" \
-  --user-attributes Name=email,Value="<seu-email>" Name=email_verified,Value=true \
-  --desired-delivery-mediums EMAIL
+aws cognito-idp admin-create-user --user-pool-id "$POOL_ID"   --username "<seu-email>"   --user-attributes Name=email,Value="<seu-email>" Name=email_verified,Value=true   --desired-delivery-mediums EMAIL
 ```
 
 O Cognito envia uma senha temporária por e-mail. No primeiro acesso a `/admin.html`, você
 define a senha definitiva e cadastra o app autenticador (TOTP).
 
-### Deploy pelo GitHub Actions (opcional)
+### Cota de concorrência da Lambda
 
-1. Descubra a claim imutável do repositório
-   (`gh api repos/VgsStudio/serverless-selfie-sbg --jq '"\(.owner.login)@\(.owner.id)/\(.name)@\(.id)"'`)
-   e faça um deploy local com `GITHUB_REPO_CLAIM=<valor>` para criar o papel
-   `github-actions-serverless-selfie-deploy`.
-2. No GitHub, em *Settings → Environments*, crie o ambiente `event` (com aprovação manual, se
-   quiser) e, em *Variables*, defina `AWS_DEPLOY_ROLE_ARN`, `HOSTED_ZONE_ID` e
-   `GITHUB_REPO_CLAIM`. São **variables**, não secrets, porque nenhum desses valores dá acesso
-   a nada sozinho; a confiança está na política OIDC restrita à branch `main` deste repositório.
-3. Rode o workflow **Deploy** manualmente (*Actions → Deploy → Run workflow*). Ele não dispara
-   em push: deploy de evento ao vivo é decisão humana.
-
-O workflow **CI** roda em todo PR e push: typecheck, testes e `cdk synth` com valores
-fictícios, sem credenciais.
+Contas novas começam com **10** execuções simultâneas (o padrão é 1000). O workflow já tem
+retry específico para `Lambda.TooManyRequestsException`, mas um lote de 20 trabalhos fica
+lento. Antes do evento, peça o aumento em *Service Quotas → AWS Lambda → Concurrent
+executions* (gratuito).
 
 ### Rollback
 
