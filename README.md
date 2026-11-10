@@ -599,8 +599,9 @@ O resto (S3, transferência, CloudFront, DynamoDB, API Gateway, logs) soma o úl
 Um bom gancho para a palestra: o custo dominante é a **orquestração**, não o processamento de
 imagem. Num volume alto, um workflow **Express** ou menos estados mudariam essa conta.
 
-Ficam de fora os custos fixos, que não dependem de selfie: o dashboard do CloudWatch (US$ 3/mês;
-os 3 primeiros da conta são grátis) e o alarme (US$ 0,10/mês). **Serverless não é sinônimo de
+Fica de fora o que não depende de selfie: o dashboard do CloudWatch da demo e o alarme da DLQ.
+Os dois cabem na franquia permanente do CloudWatch (3 dashboards de até 50 métricas, 10 alarmes),
+então custam zero; fora dela seriam US$ 3/mês e US$ 0,10/mês. **Serverless não é sinônimo de
 grátis**: com créditos a fatura pode vir zerada, mas o consumo existe. Crie um alerta no AWS
 Budgets antes do evento (alerta não é teto de cobrança) e use **Encerrar entrada** + limpeza ao
 final.
