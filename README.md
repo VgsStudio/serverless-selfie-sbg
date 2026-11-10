@@ -251,7 +251,7 @@ stateDiagram-v2
     RECEIVED --> FAILED: imagem inválida
     PROCESSING --> COMPLETED: duas saídas gravadas
     PROCESSING --> FAILED: erro após retries
-    COMPLETED --> EXPIRED: 24 h
+    COMPLETED --> EXPIRED: 45 min
     AWAITING_UPLOAD --> DELETION_PENDING: DELETE
     RECEIVED --> DELETION_PENDING: DELETE
     PROCESSING --> DELETION_PENDING: DELETE
@@ -326,9 +326,13 @@ só para o painel.
 - Buckets privados (Block Public Access), SSE-S3, TLS obrigatório; imagens só por URL assinada
   de 2 minutos.
 - Logs JSON com `jobId`/`requestId`; **nunca** foto, cookie, token ou URL assinada.
-- Retenção: 24 h, aplicada na leitura, com TTL e Lifecycle (incluindo versões antigas) como
+- Retenção: **até 1 hora**. O trabalho vence em 45 min (acesso negado na leitura) e uma Lambda
+  agendada a cada 10 min apaga foto, molduras (todas as versões) e o registro. TTL e Lifecycle
+  (incluindo versões antigas) ficam como
   limpeza física.
 - Sem reconhecimento facial, sem galeria pública, nenhuma selfie no telão sem autorização.
+- Antes de gerar, o site avisa que quem envia se responsabiliza pela imagem, que o projeto é
+  educativo/de demonstração e que tudo é apagado em até 1 hora.
 
 **Apresentador (com login):**
 - Cognito User Pool **sem auto-cadastro**, senha forte e **MFA TOTP obrigatório**. O único
@@ -364,7 +368,7 @@ por variável de ambiente nas Lambdas.
 | Trabalhos sintéticos | 100 (lote ≤ 20) | `MAX_SYNTHETIC_JOBS` |
 | Sessão | 2 h, até o fim do evento | `SESSION_SECONDS`, `EVENT_ENDS_AT` |
 | Autorização de upload / URL de resultado | 2 min / 2 min | `UPLOAD_URL_SECONDS`, `RESULT_URL_SECONDS` |
-| Retenção de dados | 24 h | `RETENTION_SECONDS` |
+| Retenção de dados | 45 min + varredura a cada 10 min (≤ 1 h) | `RETENTION_SECONDS` |
 | Logs | 7 dias | CDK |
 | Polling no site | 2 s → 6 s, para em 2 min | `web/app.js` |
 
@@ -375,8 +379,10 @@ nenhuma sessão nova é criada.
 
 ## Observabilidade e demo de escala
 
-**Painel do apresentador (`/admin.html`):** contadores agregados (sessões, selfies da turma,
-sintéticos, falhas definitivas, duração ponta a ponta média e p95 do processamento), tabela dos
+**Painel do apresentador (`/admin.html`):** contadores agregados (sessões, selfies da turma
+processadas e excluídas, sintéticos, falhas definitivas, duração ponta a ponta média e p95 do
+processamento), o gráfico **Lambdas em execução ao mesmo tempo** (por minuto, últimos 15 min,
+com pico × limite da conta, throttles e invocações, lidos do CloudWatch), tabela dos
 últimos trabalhos com link direto para a **execução no Step Functions**, atalhos para S3,
 DynamoDB e o dashboard, e os botões **Executar lote de demonstração**, **Parar lote**,
 **Demonstrar recuperação** e **Encerrar entrada**. Sem fotos e sem dados pessoais: pode ir
@@ -408,7 +414,7 @@ infra/
   oidc-stack.ts       papel IAM para o GitHub Actions (opcional)
 services/
   common.ts           clientes AWS, limites, chaves do DynamoDB, helpers HTTP e log
-  api.ts              λ api: sessões, trabalhos, resultado, exclusão
+  api.ts              λ api: sessões, trabalhos, resultado, exclusão · λ sweep: apaga o vencido (10 min)
   admin.ts            λ admin: painel, lote sintético, falha controlada, abrir/fechar entrada
   pipeline.ts         λ claim / validate / render (tarefas do Step Functions)
   image.ts            leitura de cabeçalho, recorte, composição (Jimp, JS puro)
@@ -555,7 +561,7 @@ exemplo. Compartilhar falhou → baixar. Tudo falhou → gravação, dita como g
 
 1. **Painel → Encerrar entrada.** Novas sessões e trabalhos param na hora; trabalhos já
    aceitos terminam normalmente.
-2. Depois de 24 h tudo expira sozinho (acesso negado na leitura; TTL e Lifecycle limpam).
+2. Em até 1 hora tudo é apagado sozinho (vencimento em 45 min + varredura a cada 10 min).
 3. Para apagar antes: `npm run event:cleanup` (dry-run) e depois
    `npm run event:cleanup -- --yes`. Apaga todas as versões dos buckets de entrada e saída e
    todos os itens da tabela **desta stack**, e nada além disso.
@@ -569,7 +575,7 @@ exemplo. Compartilhar falhou → baixar. Tudo falhou → gravação, dita como g
 Não há preço fechado: depende da região, do volume do ensaio + evento e dos benefícios da conta.
 O que gera custo, por selfie: chamadas à API (incluindo polling), invocações e GB-s das Lambdas
 (o `render` usa 2 GB por alguns segundos, duas vezes), transições do Step Functions Standard,
-leituras/escritas no DynamoDB, PUT/GET e armazenamento no S3 (por 24 h), transferência via
+leituras/escritas no DynamoDB, PUT/GET e armazenamento no S3 (por até 1 h), transferência via
 CloudFront e logs/métricas. Para ~10 pessoas + ensaios o volume é pequeno, mas **serverless
 não é sinônimo de grátis**: crie um alerta no AWS Budgets antes do evento (alerta não é teto
 de cobrança) e use **Encerrar entrada** + limpeza ao final.

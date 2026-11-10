@@ -79,6 +79,11 @@ h2 { font-size: 20px; }
 .privacy ul { padding-left: 18px; margin: 8px 0 0; }
 
 .hint { color: var(--muted); margin: 0 0 12px; }
+.disclaimer {
+  margin: 14px 0 0; padding: 10px 12px; border-radius: 10px;
+  background: var(--bg); border-left: 4px solid var(--orange);
+  font-size: 13px; color: var(--muted);
+}
 .crop {
   aspect-ratio: 4 / 5; width: 100%;
   border-radius: 8px; overflow: hidden;
@@ -128,3 +133,7 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
 .mt { margin-top: 10px; }
 /* texto longo (ids, mensagens de erro) quebra em vez de estourar a largura */
 .card, .alert, #action-status { overflow-wrap: anywhere; min-width: 0; }
+.bars { display: flex; align-items: flex-end; gap: 6px; height: 140px; margin: 8px 0 10px; padding-top: 18px; border-bottom: 1px solid var(--line); }
+.bars div { position: relative; flex: 1; background: var(--purple); border-radius: 4px 4px 0 0; }
+.bars div.full { background: var(--orange); }
+.bars span { position: absolute; top: -18px; left: 0; right: 0; text-align: center; font-size: 11px; font-weight: 800; color: var(--muted); }

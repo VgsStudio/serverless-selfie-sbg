@@ -30,6 +30,13 @@
       <div class="grid" id="stats"></div>
 
       <div class="card">
+        <h2>Lambdas em execução ao mesmo tempo</h2>
+        <div class="grid" id="lambda-stats"></div>
+        <div class="bars" id="lambda-bars" aria-label="Execuções simultâneas por minuto"></div>
+        <p class="small muted">ConcurrentExecutions (Maximum) da conta, por minuto, últimos 15 min. A barra laranja bateu no limite; acima dele, a AWS faz throttle e o Retry do workflow tenta de novo. O CloudWatch publica com 1–2 min de atraso.</p>
+      </div>
+
+      <div class="card">
         <h2>Controles da demo</h2>
         <div class="row">
           <label>Lote <input id="count" type="number" min="1" max="20" value="20"></label>

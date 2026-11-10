@@ -16,7 +16,9 @@
     "event:cleanup": "node scripts/cleanup.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.1165.0",
     "@aws-sdk/client-dynamodb": "^3.1165.0",
+    "@aws-sdk/client-lambda": "^3.1165.0",
     "@aws-sdk/client-s3": "^3.1165.0",
     "@aws-sdk/lib-dynamodb": "^3.1165.0",
     "@aws-sdk/s3-presigned-post": "^3.1165.0",

@@ -3,6 +3,8 @@
 // um token válido. Nada de foto, sessão ou token no que é devolvido.
 import { GetCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { CloudWatchClient, GetMetricDataCommand, type MetricDataResult } from '@aws-sdk/client-cloudwatch';
+import { GetAccountSettingsCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import sample from '../web/sample.jpg';
 import {
   INPUT_BUCKET, LIMITS, META_PK, TABLE, ddb, effectiveStatus, epoch, error, inputKey, json, jobPk, log,
@@ -10,6 +12,37 @@ import {
 } from './common.ts';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const cw = new CloudWatchClient({});
+const lambdaClient = new LambdaClient({});
+let accountLimit: number | undefined;
+
+/** Concorrência de Lambda na conta, minuto a minuto, nos últimos 15 min.
+ *  É a mesma métrica do dashboard (ConcurrentExecutions, Maximum), trazida
+ *  para o painel. O CloudWatch publica com ~1–2 min de atraso. */
+async function lambdaMetrics() {
+  const end = new Date();
+  const start = new Date(end.getTime() - 15 * 60_000);
+  const q = (Id: string, MetricName: string, Stat: string) =>
+    ({ Id, MetricStat: { Metric: { Namespace: 'AWS/Lambda', MetricName }, Period: 60, Stat } });
+  const out = await cw.send(new GetMetricDataCommand({
+    StartTime: start,
+    EndTime: end,
+    ScanBy: 'TimestampAscending',
+    MetricDataQueries: [q('conc', 'ConcurrentExecutions', 'Maximum'), q('thr', 'Throttles', 'Sum'), q('inv', 'Invocations', 'Sum')],
+  }));
+  const r: Record<string, MetricDataResult> = Object.fromEntries((out.MetricDataResults ?? []).map((m) => [m.Id, m]));
+  const total = (id: string) => (r[id]?.Values ?? []).reduce((a: number, b: number) => a + b, 0);
+  accountLimit ??= (await lambdaClient.send(new GetAccountSettingsCommand({}))).AccountLimit?.ConcurrentExecutions;
+  const conc: MetricDataResult = r.conc ?? {};
+  return {
+    windowMinutes: 15,
+    limit: accountLimit,
+    peak: Math.max(0, ...(conc.Values ?? [])),
+    throttles: total('thr'),
+    invocations: total('inv'),
+    series: (conc.Timestamps ?? []).map((t: Date, i: number) => ({ t: t.toISOString(), v: conc.Values![i] })),
+  };
+}
 
 async function getMeta() {
   const { Item } = await ddb.send(new GetCommand({ TableName: TABLE, Key: { pk: META_PK } }));
@@ -97,19 +130,25 @@ async function dashboard(): Promise<HttpResult> {
   } while (ExclusiveStartKey);
 
   const counts: Record<'participants' | 'synthetic', Record<string, number>> = { participants: {}, synthetic: {} };
+  // Processadas = chegaram a COMPLETED, mesmo que a pessoa tenha excluído depois.
+  const processed = { participants: 0, synthetic: 0 };
   const endToEnd: number[] = [];
   const processing: number[] = [];
   for (const j of jobs) {
     const group = counts[j.isSynthetic ? 'synthetic' : 'participants'];
     const s = effectiveStatus(j);
     group[s] = (group[s] ?? 0) + 1;
-    if (s === 'COMPLETED') {
+    if (j.completedAt) processed[j.isSynthetic ? 'synthetic' : 'participants']++;
+    if (j.completedAt) {
       endToEnd.push(ms(j.createdAt, j.completedAt)!);
       processing.push(ms(j.receivedAt, j.completedAt)!);
     }
   }
 
-  const meta = await getMeta();
+  const [meta, lambda] = await Promise.all([
+    getMeta(),
+    lambdaMetrics().catch((e) => { console.error(e); return null; }), // painel funciona mesmo sem métricas
+  ]);
   return json(200, {
     meta: {
       sessions: meta.sessions ?? 0,
@@ -120,6 +159,8 @@ async function dashboard(): Promise<HttpResult> {
     },
     limits: LIMITS,
     counts,
+    processed,
+    lambda,
     durations: { endToEnd: stats(endToEnd), processing: stats(processing) },
     recent: jobs.slice(0, 30).map((j) => ({
       jobId: j.jobId,

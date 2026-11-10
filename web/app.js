@@ -239,9 +239,7 @@ $('#delete-all').addEventListener('click', async () => {
 
 // ---------- início: cria (ou reaproveita) a sessão anônima ----------
 async function startSession() {
-  const s = await api('/sessions', { method: 'POST' });
-  $('#retention').textContent = `${s.config.retentionHours} horas`;
-  return s;
+  return api('/sessions', { method: 'POST' });
 }
 
 (async () => {

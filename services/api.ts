@@ -1,7 +1,7 @@
 // API pública: sessão anônima, criação de trabalho, status, resultado e exclusão.
 // Sem login para participantes: a autorização é o cookie de sessão (token
 // aleatório, só o hash fica no banco) + o vínculo job.sessionId === sessão.
-import { GetCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DeleteCommand, GetCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { DeleteObjectsCommand, GetObjectCommand, ListObjectVersionsCommand } from '@aws-sdk/client-s3';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -81,7 +81,7 @@ const publicConfig = () => ({
   date: '14/11/2026',
   maxUploadBytes: LIMITS.maxUploadBytes,
   jobsPerSession: LIMITS.jobsPerSession,
-  retentionHours: Math.round(LIMITS.retentionSeconds / 3600),
+  retentionMinutes: Math.round(LIMITS.retentionSeconds / 60),
 });
 
 async function presignUpload(job: Job) {
@@ -323,4 +323,31 @@ export async function handler(event: HttpEvent): Promise<HttpResult> {
     console.error(e);
     return error(500, 'INTERNAL', 'Erro interno.', rid);
   }
+}
+
+/** Varredura agendada (EventBridge, a cada 10 min): apaga fotos, molduras e o
+ *  registro dos trabalhos vencidos. Com retenção de 45 min, nada passa de ~1 h.
+ *  TTL do DynamoDB e Lifecycle do S3 ficam só como rede de segurança. */
+export async function sweep() {
+  const now = nowIso();
+  let removed = 0;
+  let ExclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const out = await ddb.send(new QueryCommand({
+      TableName: TABLE,
+      IndexName: 'byType',
+      KeyConditionExpression: 'gsi1pk = :j',
+      FilterExpression: 'expiresAt < :now',
+      ExpressionAttributeValues: { ':j': 'JOB', ':now': now },
+      ExclusiveStartKey,
+    }));
+    for (const j of (out.Items ?? []) as Job[]) {
+      await deleteJobObjects(j.jobId);
+      await ddb.send(new DeleteCommand({ TableName: TABLE, Key: { pk: j.pk } }));
+      removed++;
+    }
+    ExclusiveStartKey = out.LastEvaluatedKey;
+  } while (ExclusiveStartKey);
+  log('sweep', { removed });
+  return { removed };
 }

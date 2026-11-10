@@ -119,25 +119,38 @@ export class SelfieStack extends Stack {
     const claimFn = fn('ClaimFn', 'pipeline.ts', 'claim');
     const validateFn = fn('ValidateFn', 'pipeline.ts', 'validate');
     const renderFn = fn('RenderFn', 'pipeline.ts', 'render', { memorySize: 2048, timeout: Duration.seconds(60) });
+    const sweepFn = fn('SweepFn', 'api.ts', 'sweep', { timeout: Duration.seconds(60) });
 
-    for (const f of [apiFn, adminFn, claimFn, validateFn, renderFn]) table.grantReadWriteData(f);
+    for (const f of [apiFn, adminFn, claimFn, validateFn, renderFn, sweepFn]) table.grantReadWriteData(f);
     inputBucket.grantPut(adminFn, 'uploads/*');
     inputBucket.grantRead(validateFn, 'uploads/*');
     inputBucket.grantRead(renderFn, 'uploads/*');
     outputBucket.grantPut(renderFn, 'outputs/*');
     // API: assina upload (Put), assina download (Get) e apaga dados a pedido.
-    apiFn.addToRolePolicy(new iam.PolicyStatement({
+    for (const f of [apiFn, sweepFn]) f.addToRolePolicy(new iam.PolicyStatement({
       actions: ['s3:PutObject', 's3:DeleteObject', 's3:DeleteObjectVersion'],
       resources: [inputBucket.arnForObjects('uploads/*')],
     }));
-    apiFn.addToRolePolicy(new iam.PolicyStatement({
+    for (const f of [apiFn, sweepFn]) f.addToRolePolicy(new iam.PolicyStatement({
       actions: ['s3:GetObject', 's3:DeleteObject', 's3:DeleteObjectVersion'],
       resources: [outputBucket.arnForObjects('outputs/*')],
     }));
-    apiFn.addToRolePolicy(new iam.PolicyStatement({
+    for (const f of [apiFn, sweepFn]) f.addToRolePolicy(new iam.PolicyStatement({
       actions: ['s3:ListBucketVersions', 's3:ListBucket'],
       resources: [inputBucket.bucketArn, outputBucket.bucketArn],
     }));
+
+    // Painel: lê a concorrência de Lambda da conta (métrica e limite).
+    adminFn.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['cloudwatch:GetMetricData', 'lambda:GetAccountSettings'],
+      resources: ['*'], // essas duas ações não aceitam recurso específico
+    }));
+
+    // Retenção: a cada 10 min apaga trabalhos vencidos (45 min) → nada passa de ~1 h.
+    new events.Rule(this, 'SweepSchedule', {
+      schedule: events.Schedule.rate(Duration.minutes(10)),
+      targets: [new eventTargets.LambdaFunction(sweepFn)],
+    });
 
     // ---------- Workflow ----------
     const retryTransient = (t: tasks.LambdaInvoke) => {
@@ -369,7 +382,7 @@ export class SelfieStack extends Stack {
 
     // ---------- Observabilidade ----------
     const dashboard = new cloudwatch.Dashboard(this, 'Dashboard', { dashboardName: 'serverless-selfie-sbg' });
-    const fns: Record<string, lambda.IFunction> = { api: apiFn, admin: adminFn, claim: claimFn, validate: validateFn, render: renderFn };
+    const fns: Record<string, lambda.IFunction> = { api: apiFn, admin: adminFn, claim: claimFn, validate: validateFn, render: renderFn, sweep: sweepFn };
     const per = (metric: string, statistic: string) =>
       Object.entries(fns).map(([label, f]) => f.metric(metric, { statistic, period: Duration.minutes(1), label }));
     const graph = (title: string, metrics: cloudwatch.IMetric[]) => new cloudwatch.GraphWidget({ title, left: metrics, width: 8, height: 6 });

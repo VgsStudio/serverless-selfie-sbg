@@ -28,7 +28,8 @@ export const LIMITS = {
   maxSessions: Number(env('MAX_SESSIONS', '100')),
   maxSyntheticJobs: Number(env('MAX_SYNTHETIC_JOBS', '100')),
   sessionSeconds: Number(env('SESSION_SECONDS', String(2 * 3600))),
-  retentionSeconds: Number(env('RETENTION_SECONDS', String(24 * 3600))),
+  // 45 min + varredura a cada 10 min (sweep) = nada fica mais de ~1 h.
+  retentionSeconds: Number(env('RETENTION_SECONDS', String(45 * 60))),
   uploadUrlSeconds: Number(env('UPLOAD_URL_SECONDS', '120')),
   resultUrlSeconds: Number(env('RESULT_URL_SECONDS', '120')),
   eventEndsAt: env('EVENT_ENDS_AT', '2026-11-15T02:59:59Z'),

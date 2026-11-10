@@ -100,10 +100,11 @@ function render(d) {
   const stats = [
     [d.meta.sessions, 'sessões anônimas'],
     [sum(p), 'selfies da turma'],
-    [p.COMPLETED ?? 0, 'da turma concluídas'],
+    [d.processed.participants, 'da turma processadas'],
     [(p.PROCESSING ?? 0) + (p.RECEIVED ?? 0), 'da turma processando'],
+    [p.DELETION_PENDING ?? 0, 'excluídas pelo participante'],
     [sum(s), 'sintéticos'],
-    [s.COMPLETED ?? 0, 'sintéticos concluídos'],
+    [d.processed.synthetic, 'sintéticos processados'],
     [(p.FAILED ?? 0) + (s.FAILED ?? 0), 'falhas definitivas'],
     [fmt(d.durations.endToEnd?.avgMs), 'ponta a ponta (média)'],
     [fmt(d.durations.processing?.p95Ms), 'processamento (p95)'],
@@ -113,6 +114,8 @@ function render(d) {
     box.append(el('b', String(v)), el('span', label));
     return box;
   }));
+
+  renderLambda(d.lambda);
 
   $('#accepting').textContent = d.meta.accepting ? '⏸ Encerrar entrada de novas selfies' : '▶ Reabrir entrada';
   $('#accepting').dataset.accepting = String(d.meta.accepting);
@@ -128,6 +131,38 @@ function render(d) {
     tr.append(id, el('td', j.isSynthetic ? (j.failOnce ? 'sintético · retry' : 'sintético') : 'turma'), status, el('td', fmt(j.endToEndMs)), el('td', fmt(j.processingMs)), exec);
     return tr;
   }));
+}
+
+function renderLambda(m) {
+  if (!m) {
+    $('#lambda-stats').replaceChildren(el('span', 'Métricas indisponíveis no momento.', { className: 'muted' }));
+    $('#lambda-bars').replaceChildren();
+    return;
+  }
+  const stats = [
+    [`${m.peak}${m.limit ? ` / ${m.limit}` : ''}`, 'pico simultâneo / limite da conta'],
+    [m.throttles, 'throttles (15 min)'],
+    [m.invocations, 'invocações (15 min)'],
+  ];
+  $('#lambda-stats').replaceChildren(...stats.map(([v, label]) => {
+    const box = el('div', undefined, { className: 'stat' });
+    box.append(el('b', String(v)), el('span', label));
+    return box;
+  }));
+  // Uma barra por minuto; minuto sem dado = 0.
+  const byMinute = new Map(m.series.map((p) => [p.t.slice(0, 16), p.v]));
+  const scale = Math.max(m.limit || 0, m.peak, 1);
+  const now = Date.now();
+  const bars = [];
+  for (let i = m.windowMinutes - 1; i >= 0; i--) {
+    const t = new Date(now - i * 60_000).toISOString().slice(0, 16);
+    const v = byMinute.get(t) ?? 0;
+    const bar = el('div', undefined, { title: `${t.slice(11)} UTC · ${v} simultâneas`, className: m.limit && v >= m.limit ? 'full' : '' });
+    bar.style.height = `${Math.max(2, (v / scale) * 100)}%`;
+    if (v) bar.append(el('span', String(v)));
+    bars.push(bar);
+  }
+  $('#lambda-bars').replaceChildren(...bars);
 }
 
 async function refresh() {
