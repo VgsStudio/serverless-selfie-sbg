@@ -385,29 +385,8 @@ export class SelfieStack extends Stack {
     new route53.AaaaRecord(this, 'AliasAAAA', { zone, recordName: props.domainName, target: alias });
 
     // ---------- Observabilidade ----------
-    const dashboard = new cloudwatch.Dashboard(this, 'Dashboard', { dashboardName: 'serverless-selfie-sbg' });
-    const fns: Record<string, lambda.IFunction> = { api: apiFn, admin: adminFn, claim: claimFn, validate: validateFn, render: renderFn, sweep: sweepFn };
-    const per = (metric: string, statistic: string) =>
-      Object.entries(fns).map(([label, f]) => f.metric(metric, { statistic, period: Duration.minutes(1), label }));
-    const graph = (title: string, metrics: cloudwatch.IMetric[]) => new cloudwatch.GraphWidget({ title, left: metrics, width: 8, height: 6 });
-    dashboard.addWidgets(
-      graph('Invocations (Sum) — volume', per('Invocations', 'Sum')),
-      graph('ConcurrentExecutions (Maximum) — simultaneidade', per('ConcurrentExecutions', 'Maximum')),
-      graph('Duration (Average)', per('Duration', 'Average')),
-    );
-    dashboard.addWidgets(
-      graph('Duration (p95)', per('Duration', 'p95')),
-      graph('Errors (Sum) — tentativas que falharam', per('Errors', 'Sum')),
-      graph('Throttles (Sum)', per('Throttles', 'Sum')),
-    );
-    dashboard.addWidgets(
-      graph('Workflow: execuções', [
-        stateMachine.metricStarted({ period: Duration.minutes(1), label: 'iniciadas' }),
-        stateMachine.metricSucceeded({ period: Duration.minutes(1), label: 'concluídas' }),
-        stateMachine.metricFailed({ period: Duration.minutes(1), label: 'falharam' }),
-      ]),
-      graph('Eventos na DLQ', [dlq.metricApproximateNumberOfMessagesVisible({ period: Duration.minutes(1) })]),
-    );
+    // Sem dashboard do CloudWatch: o painel admin lê as métricas que a demo usa
+    // (concorrência, throttles, invocações) direto do CloudWatch, por período.
 
     // ---------- Publicação do site ----------
     // admin-config.json é gerado no deploy: os IDs nunca ficam no repositório.
@@ -419,7 +398,6 @@ export class SelfieStack extends Stack {
           cognitoDomain,
           clientId: userPoolClient.userPoolClientId,
           redirectUri: adminRedirect,
-          dashboardName: 'serverless-selfie-sbg',
           stateMachineArn: stateMachine.stateMachineArn,
           inputBucket: inputBucket.bucketName,
           outputBucket: outputBucket.bucketName,

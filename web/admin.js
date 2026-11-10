@@ -203,7 +203,6 @@ async function action(pending, fn, done) {
 
   $('#panel').hidden = false;
   const links = [
-    ['Dashboard CloudWatch', consoleUrl('cloudwatch', `dashboards/dashboard/${cfg.dashboardName}`)],
     ['Step Functions', consoleUrl('states', `/statemachines/view/${cfg.stateMachineArn}`)],
     ['S3 entrada', `https://s3.console.aws.amazon.com/s3/buckets/${cfg.inputBucket}?region=${cfg.region}&prefix=uploads/`],
     ['S3 saída', `https://s3.console.aws.amazon.com/s3/buckets/${cfg.outputBucket}?region=${cfg.region}&prefix=outputs/`],

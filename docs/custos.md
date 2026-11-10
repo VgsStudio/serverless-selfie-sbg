@@ -55,9 +55,8 @@ mesmo valor da calculadora do site para esses serviços.
   HTTP API US$ 1,00/milhão; DynamoDB on-demand US$ 0,625/milhão WRU e US$ 0,125/milhão RRU;
   S3 US$ 0,005/1.000 PUT e US$ 0,0004/1.000 GET; S3 → internet US$ 0,09/GB;
   CloudFront América do Sul US$ 0,11/GB e US$ 0,022/10.000 HTTPS; Logs US$ 0,50/GB.
-- **Fora da conta:** o dashboard do CloudWatch da demo e o alarme da DLQ. Cabem na franquia
-  permanente (3 dashboards de até 50 métricas, 10 alarmes): custo zero nesta conta, que só tem
-  esse dashboard. Fora da franquia seriam US$ 3/mês e US$ 0,10/mês. Eventos do S3 no EventBridge não são cobrados.
+- **Fora da conta:** o alarme da DLQ, que cabe na franquia permanente do CloudWatch (10 alarmes):
+  custo zero. A demo não tem dashboard do CloudWatch; o painel admin lê as métricas direto. Eventos do S3 no EventBridge não são cobrados.
 
 ## Onde está
 

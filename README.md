@@ -86,7 +86,7 @@ flowchart LR
         S3OUT[("S3 saída<br/>outputs/")]
     end
 
-    CW["CloudWatch<br/>logs JSON, métricas,<br/>dashboard, alarme"]
+    CW["CloudWatch<br/>logs JSON, métricas,<br/>alarme"]
 
     UI -- "HTTPS" --> R53 --> CF
     ADM --> CF
@@ -384,17 +384,18 @@ nenhuma sessão nova é criada.
 
 **Painel do apresentador (`/admin.html`):** contadores agregados **por período** (últimos 15 min, 1 h, 24 h, 7 dias ou 30 dias: sessões,
 selfies da turma processadas e excluídas, sintéticos, falhas definitivas, duração ponta a ponta média e p95 do
-processamento), o gráfico **Lambdas em execução ao mesmo tempo** (por minuto, últimos 15 min,
-com pico × limite da conta, throttles e invocações, lidos do CloudWatch), tabela dos
-últimos trabalhos com link direto para a **execução no Step Functions**, atalhos para S3,
-DynamoDB e o dashboard, e os botões **Executar lote de demonstração**, **Parar lote**,
+processamento), o gráfico **Lambdas em execução ao mesmo tempo** (no período escolhido, com pico × limite da
+conta e throttles e invocações só desta app, lidos do CloudWatch), tabela dos
+últimos trabalhos com link direto para a **execução no Step Functions**, atalhos para S3 e
+DynamoDB, e os botões **Executar lote de demonstração**, **Parar lote**,
 **Demonstrar recuperação** e **Encerrar entrada**. Sem fotos e sem dados pessoais: pode ir
 para o telão.
 
-**Dashboard CloudWatch `serverless-selfie-sbg`** (provisionado no CDK), por função
-(`api`, `admin`, `claim`, `validate`, `render`):
+**Não há dashboard do CloudWatch**: o painel admin consulta o CloudWatch direto
+(`GetMetricData`), então as métricas da demo ficam num só lugar. Para aprofundar, o console
+do CloudWatch mostra as mesmas métricas por função. Como ler cada uma:
 
-| Widget | Estatística | Como ler |
+| Métrica | Estatística | Como ler |
 |---|---|---|
 | `Invocations` | Sum | Volume. Inclui polling, etapas e retries; não é número de selfies. |
 | `ConcurrentExecutions` | **Maximum** | Simultaneidade real. Só esta métrica prova trabalho em paralelo. |
@@ -413,7 +414,7 @@ As métricas padrão da Lambda saem em intervalos de 1 minuto: espere ~1–2 min
 ```text
 infra/
   app.ts              entrada do CDK: lê variáveis, instancia as stacks
-  selfie-stack.ts     toda a aplicação (dados, Lambdas, workflow, API, CDN, Cognito, dashboard)
+  selfie-stack.ts     toda a aplicação (dados, Lambdas, workflow, API, CDN, Cognito, alarme)
   oidc-stack.ts       papel IAM para o GitHub Actions (opcional)
 services/
   common.ts           clientes AWS, limites, chaves do DynamoDB, helpers HTTP e log
@@ -543,7 +544,7 @@ Antes (com antecedência):
 - [ ] Deploy feito, `https://serverless-selfie.vsoller.com.br` testado em **Safari/iPhone** e **Chrome/Android**, incluindo o botão de Story e o fallback de download.
 - [ ] Login no painel testado (senha + TOTP).
 - [ ] Ensaio: uma selfie, um lote de 20 e a falha controlada; anotar duração real e atraso das métricas.
-- [ ] Abas abertas: app, painel, Step Functions, S3 entrada, DynamoDB, dashboard CloudWatch.
+- [ ] Abas abertas: app, painel admin, Step Functions, S3 entrada, DynamoDB.
 - [ ] Gravação do fluxo feliz, do retry e do painel como contingência (identificada como gravação).
 - [ ] `npm run event:cleanup -- --yes` depois do ensaio, para zerar contadores e imagens.
 
@@ -556,7 +557,7 @@ Durante (slide 18, ~14 min):
 4. **Recuperação de falha:** *Demonstrar recuperação* → histórico da execução: erro
    `DemoTransientError` → espera do Retry → nova tentativa → sucesso. Avisar que a falha é
    provocada.
-5. **Interpretar:** dashboard CloudWatch, `ConcurrentExecutions` (Maximum) no período do lote.
+5. **Interpretar:** cartão "Lambdas em execução ao mesmo tempo" do painel (período "últimos 15 minutos"): pico × limite e throttles do lote.
    Se as métricas atrasarem, voltar ao workflow e retomar no fim.
 
 Regra de contingência: não depurar no palco por mais de 2 minutos. Câmera falhou → imagem de
@@ -599,9 +600,8 @@ O resto (S3, transferência, CloudFront, DynamoDB, API Gateway, logs) soma o úl
 Um bom gancho para a palestra: o custo dominante é a **orquestração**, não o processamento de
 imagem. Num volume alto, um workflow **Express** ou menos estados mudariam essa conta.
 
-Fica de fora o que não depende de selfie: o dashboard do CloudWatch da demo e o alarme da DLQ.
-Os dois cabem na franquia permanente do CloudWatch (3 dashboards de até 50 métricas, 10 alarmes),
-então custam zero; fora dela seriam US$ 3/mês e US$ 0,10/mês. **Serverless não é sinônimo de
+Fica de fora o que não depende de selfie: o alarme da DLQ, que cabe na franquia permanente do
+CloudWatch (10 alarmes), então custa zero. A demo não tem dashboard do CloudWatch. **Serverless não é sinônimo de
 grátis**: com créditos a fatura pode vir zerada, mas o consumo existe. Crie um alerta no AWS
 Budgets antes do evento (alerta não é teto de cobrança) e use **Encerrar entrada** + limpeza ao
 final.
