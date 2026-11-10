@@ -24,7 +24,7 @@ mkdirSync(CACHE, { recursive: true });
 const TITLE = 'O que é arquitetura Serverless?';
 const GROUP = 'Student Builder Group IMT';
 const DATE = '14/11/2026';
-const TAGLINE = 'Sua lembrança serverless λ';
+const TAGLINE = 'Sua lembrança serverless';
 
 const C = { dark: '#1A0F3D', purple: '#655CC6', blue: '#5BBEED', green: '#A4DF64', orange: '#F59D01', soft: '#F6F5FB' };
 
@@ -117,7 +117,6 @@ writeFileSync(join(OUT, 'frames.json'), JSON.stringify(frames, null, 2) + '\n');
       <circle cx="430" cy="760" r="170"/><circle cx="640" cy="660" r="220"/><circle cx="830" cy="790" r="150"/>
       <rect x="300" y="760" width="660" height="180" rx="90"/>
     </g>
-    <text x="610" y="880" text-anchor="middle" font-family="Sora" font-weight="700" font-size="260" fill="${C.purple}">λ</text>
     <text x="600" y="1180" text-anchor="middle" font-family="Manrope" font-weight="800" font-size="64" fill="#fff">imagem de exemplo</text>
   </svg>`;
   const png = render(svg, 1200);
